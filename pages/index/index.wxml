@@ -1,0 +1,139 @@
+<view class="container">
+  <!-- Header -->
+  <view class="header">
+    <view class="title">数字合成</view>
+    <view class="header-right">
+      <view class="score-box">
+        <text class="score-label">分数</text>
+        <text class="score-value">{{score}}</text>
+      </view>
+      <view class="menu-btn" bindtap="onToggleMenu">
+        <view class="menu-icon-bar"></view>
+        <view class="menu-icon-bar"></view>
+        <view class="menu-icon-bar"></view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Supreme picker (replaces control row when active) -->
+  <view class="supreme-picker" wx:if="{{supremePicker}}">
+    <text class="supreme-label">点击其他数字可更换，再点已选数字取消</text>
+    <view class="supreme-options">
+      <view class="supreme-exit" bindtap="onCancelSupreme">
+        <text>✕</text>
+      </view>
+      <view
+        class="supreme-opt color-{{item}}"
+        wx:for="{{supremePicker.options}}"
+        wx:for-item="item"
+        wx:key="*this"
+        data-value="{{item}}"
+        bindtap="onSupremePick"
+      >
+        <text class="supreme-opt-text">{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Control row: next number + power-ups shifted right -->
+  <view class="control-row" wx:else>
+    <view class="next-area">
+      <text class="next-label">下一个数字</text>
+      <view class="next-number color-{{currentNumber}}">{{currentNumber}}</view>
+    </view>
+    <view class="power-bar">
+      <view class="power-btn {{activePower === 'wand' ? 'power-active' : ''}} {{wandCount === 0 ? 'power-empty' : ''}}" bindtap="onSelectPower" data-type="wand">
+        <text class="power-icon">🪄</text>
+        <text class="power-count">x{{wandCount}}</text>
+      </view>
+      <view class="power-btn {{activePower === 'swap' ? 'power-active' : ''}} {{swapCount === 0 ? 'power-empty' : ''}}" bindtap="onSelectPower" data-type="swap">
+        <text class="power-icon">🔄</text>
+        <text class="power-count">x{{swapCount}}</text>
+      </view>
+      <view class="power-btn {{activePower === 'clear' ? 'power-active' : ''}} {{clearCount === 0 ? 'power-empty' : ''}}" bindtap="onSelectPower" data-type="clear">
+        <text class="power-icon">💣</text>
+        <text class="power-count">x{{clearCount}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Upgrade power-ups row -->
+  <view class="power-row-2" wx:if="{{!supremePicker}}">
+    <view class="power-btn power-upgrade {{activePower === 'supremeWand' ? 'power-active' : ''}} {{supremeWandCount === 0 ? 'power-empty' : ''}}" bindtap="onSelectPower" data-type="supremeWand">
+      <text class="power-icon">👑</text>
+      <text class="power-label">至尊魔法棒</text>
+      <text class="power-count">x{{supremeWandCount}}</text>
+    </view>
+    <view class="power-btn power-upgrade {{activePower === 'dragonHand' ? 'power-active' : ''}} {{dragonHandCount === 0 ? 'power-empty' : ''}}" bindtap="onSelectPower" data-type="dragonHand">
+      <text class="power-icon">🐉</text>
+      <text class="power-label">龙王的手</text>
+      <text class="power-count">x{{dragonHandCount}}</text>
+    </view>
+    <view class="power-btn power-upgrade {{activePower === 'immortal' ? 'power-active' : ''}} {{immortalCount === 0 ? 'power-empty' : ''}}" bindtap="onSelectPower" data-type="immortal">
+      <text class="power-icon">☯️</text>
+      <text class="power-label">绝世仙尊</text>
+      <text class="power-count">x{{immortalCount}}</text>
+    </view>
+  </view>
+
+  <text class="hint">{{hintText}}</text>
+
+  <!-- Game board -->
+  <scroll-view class="board-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="board">
+      <view class="row" wx:for="{{grid}}" wx:for-item="row" wx:for-index="r" wx:key="r{{r}}">
+        <view
+          class="cell color-{{cell.value}} {{cell.merging ? 'merging' : ''}} {{cell.extraClass}}"
+          style="{{cell.style}}"
+          wx:for="{{row}}"
+          wx:for-item="cell"
+          wx:for-index="c"
+          wx:key="c{{c}}"
+          data-col="{{c}}"
+          data-row="{{r}}"
+          bindtap="onTapColumn"
+        >
+          <text wx:if="{{cell.value > 0}}" class="cell-text num-{{cell.value > 128 ? 128 : cell.value}}">{{cell.value}}</text>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- Menu backdrop -->
+  <view class="menu-backdrop" wx:if="{{showMenu}}" bindtap="onCloseMenu"></view>
+
+  <!-- Menu popup -->
+  <view class="menu-popup {{showMenu ? 'menu-show' : ''}}">
+    <view class="menu-item toggle-item" bindtap="onToggleSfx">
+      <text>音效</text>
+      <view class="menu-toggle {{sfxEnabled ? 'toggle-on' : ''}}">
+        <view class="toggle-knob"></view>
+      </view>
+    </view>
+    <view class="menu-item toggle-item" bindtap="onToggleBgm">
+      <text>背景音乐</text>
+      <view class="menu-toggle {{bgmEnabled ? 'toggle-on' : ''}}">
+        <view class="toggle-knob"></view>
+      </view>
+    </view>
+    <view class="menu-divider"></view>
+    <view class="menu-item" bindtap="onMenuRestart">
+      <text>重新开始</text>
+    </view>
+  </view>
+
+  <!-- Celebration text -->
+  <view class="celebration" wx:if="{{celebration}}">
+    <text class="celebration-text">{{celebration}}</text>
+  </view>
+
+  <!-- Game over overlay -->
+  <view class="overlay" wx:if="{{gameOver}}" bindtap="onNewGame">
+    <view class="overlay-box">
+      <text class="overlay-title">游戏结束</text>
+      <text class="overlay-score">得分: {{score}}</text>
+      <view class="overlay-btn">重新开始</view>
+    </view>
+  </view>
+
+</view>
