@@ -1,10 +1,12 @@
+var C = require('./constants.js');
+
 var state = {};
 
 function initState() {
   var grid = [];
-  for (var r = 0; r < ROWS; r++) {
+  for (var r = 0; r < C.ROWS; r++) {
     var row = [];
-    for (var c = 0; c < COLS; c++) row.push(0);
+    for (var c = 0; c < C.COLS; c++) row.push(0);
     grid.push(row);
   }
   state.grid = grid;
@@ -39,9 +41,6 @@ function initState() {
   state.bgmEnabled = false;
 
   state._dragonDrops = 0;
-  state._touchStartY = 0;
-  state._scrollStartY = 0;
-  state._isScrolling = false;
-  state._lastScrollDy = 0;
-  state._lastScrollTime = 0;
 }
+
+module.exports = { state: state, initState: initState };

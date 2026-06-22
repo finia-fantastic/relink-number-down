@@ -1,3 +1,5 @@
+var C = require('./constants.js');
+
 var audio = {
   sfxEnabled: true,
   bgmEnabled: false,
@@ -33,31 +35,26 @@ var audio = {
 
   playBgm: function() {
     if (!this.bgmEnabled) return;
-    if (!this._fileExists(BGM_PATH)) return;
+    if (!this._fileExists(C.BGM_PATH)) return;
     if (!this._bgm) {
       this._bgm = wx.createInnerAudioContext();
-      this._bgm.src = BGM_PATH;
+      this._bgm.src = C.BGM_PATH;
       this._bgm.loop = true;
       this._bgm.volume = 0.4;
     }
     this._bgm.play();
   },
 
-  pauseBgm: function() {
-    if (this._bgm) this._bgm.pause();
-  },
+  pauseBgm: function() { if (this._bgm) this._bgm.pause(); },
 
-  playDrop: function() { this._playSfx(DROP_PATH); },
-  playMerge: function() { this._playSfx(MERGE_PATH); },
+  playDrop:  function() { this._playSfx(C.DROP_PATH); },
+  playMerge: function() { this._playSfx(C.MERGE_PATH); },
 
-  toggleSfx: function() {
-    this.sfxEnabled = !this.sfxEnabled;
-    this._save();
-  },
-
+  toggleSfx: function() { this.sfxEnabled = !this.sfxEnabled; this._save(); },
   toggleBgm: function() {
-    this.bgmEnabled = !this.bgmEnabled;
-    this._save();
-    if (this.bgmEnabled) { this.playBgm(); } else { this.pauseBgm(); }
+    this.bgmEnabled = !this.bgmEnabled; this._save();
+    if (this.bgmEnabled) this.playBgm(); else this.pauseBgm();
   }
 };
+
+module.exports = audio;
