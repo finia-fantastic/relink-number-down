@@ -215,10 +215,7 @@ var audio = {
   }
 };
 
-var initState = initState;
 
-var scheduleAction = scheduleAction;
-var addTween = addTween;
 
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -627,7 +624,6 @@ function restartGame() {
 }
 
 
-var getCelebTransform = getCelebTransform;
 
 var _ctx = null, _sw = 0, _sh = 0, _sc = 1;
 
@@ -1019,5 +1015,4 @@ function gameLoop(timestamp) {
 }
 
 
-// === Init ===
 init();
