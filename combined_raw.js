@@ -54,14 +54,33 @@ var BGM_PATH   = '/assets/audio/bgm.mp3';
 var DROP_PATH  = '/assets/audio/drop.mp3';
 var MERGE_PATH = '/assets/audio/merge.mp3';
 
+module.exports = {
+  ROWS: ROWS, COLS: COLS,
+  CELL_W: CELL_W, CELL_H: CELL_H, GAP: GAP, ROW_H: ROW_H,
+  SPAWN_VALUES: SPAWN_VALUES, WAND_VALUES: WAND_VALUES,
+  CELL_COLORS: CELL_COLORS,
+  TEXT_DARK: TEXT_DARK, TEXT_LIGHT: TEXT_LIGHT,
+  getTextColor: getTextColor, getFontSize: getFontSize,
+  BG_COLOR: BG_COLOR, HEADER_BG: HEADER_BG, HEADER_TEXT: HEADER_TEXT,
+  TITLE_COLOR: TITLE_COLOR, HINT_COLOR: HINT_COLOR, OVERLAY_BG: OVERLAY_BG,
+  MENU_BG: MENU_BG, POWER_BORDER: POWER_BORDER,
+  POWER_ACTIVE_BORDER: POWER_ACTIVE_BORDER, POWER_ACTIVE_BG: POWER_ACTIVE_BG,
+  TOGGLE_ON_BG: TOGGLE_ON_BG, TOGGLE_OFF_BG: TOGGLE_OFF_BG,
+  CELEB_COLOR: CELEB_COLOR, SWAP_GLOW: SWAP_GLOW, NEWGAME_BG: NEWGAME_BG,
+  HEADER_PAD_TOP: HEADER_PAD_TOP, HEADER_H: HEADER_H,
+  CONTROL_H: CONTROL_H, UPGRADE_H: UPGRADE_H, HINT_H: HINT_H,
+  BOARD_TOP: BOARD_TOP, DESIGN_W: DESIGN_W,
+  BGM_PATH: BGM_PATH, DROP_PATH: DROP_PATH, MERGE_PATH: MERGE_PATH
+};
+var C = require('./constants.js');
 
 var state = {};
 
 function initState() {
   var grid = [];
-  for (var r = 0; r < ROWS; r++) {
+  for (var r = 0; r < C.ROWS; r++) {
     var row = [];
-    for (var c = 0; c < COLS; c++) row.push(0);
+    for (var c = 0; c < C.COLS; c++) row.push(0);
     grid.push(row);
   }
   state.grid = grid;
@@ -98,6 +117,17 @@ function initState() {
   state._dragonDrops = 0;
 }
 
+module.exports = { state: state, initState: initState };
+var stateModule = require('./state.js');
+var state = stateModule.state;
+
+var tweens = [];
+var pendingActions = [];
+var _nextAnimId = 0;
+
+function scheduleAction(delayMs, callback) {
+  pendingActions.push({ time: Date.now() + delayMs, callback: callback });
+}
 
 function addTween(type, data, durationMs) {
   tweens.push({ id: _nextAnimId++, type: type, startTime: Date.now(), duration: durationMs, progress: 0, data: data });
@@ -149,6 +179,13 @@ function getCelebTransform(progress) {
   }
 }
 
+module.exports = {
+  scheduleAction: scheduleAction, addTween: addTween,
+  updateAnim: updateAnim, processActions: processActions,
+  updateScrollInertia: updateScrollInertia,
+  getCelebTransform: getCelebTransform
+};
+var C = require('./constants.js');
 
 var audio = {
   sfxEnabled: true,
@@ -185,10 +222,10 @@ var audio = {
 
   playBgm: function() {
     if (!this.bgmEnabled) return;
-    if (!this._fileExists(BGM_PATH)) return;
+    if (!this._fileExists(C.BGM_PATH)) return;
     if (!this._bgm) {
       this._bgm = wx.createInnerAudioContext();
-      this._bgm.src = BGM_PATH;
+      this._bgm.src = C.BGM_PATH;
       this._bgm.loop = true;
       this._bgm.volume = 0.4;
     }
@@ -197,8 +234,8 @@ var audio = {
 
   pauseBgm: function() { if (this._bgm) this._bgm.pause(); },
 
-  playDrop:  function() { this._playSfx(DROP_PATH); },
-  playMerge: function() { this._playSfx(MERGE_PATH); },
+  playDrop:  function() { this._playSfx(C.DROP_PATH); },
+  playMerge: function() { this._playSfx(C.MERGE_PATH); },
 
   toggleSfx: function() { this.sfxEnabled = !this.sfxEnabled; this._save(); },
   toggleBgm: function() {
@@ -207,16 +244,21 @@ var audio = {
   }
 };
 
+module.exports = audio;
+var C = require('./constants.js');
+var stateModule = require('./state.js');
+var state = stateModule.state;
+var initState = stateModule.initState;
+var anim = require('./animation.js');
+var audio = require('./audio.js');
 
+var scheduleAction = anim.scheduleAction;
+var addTween = anim.addTween;
 
-
-
-
-
-
-
-
-
+var ROWS = C.ROWS;
+var COLS = C.COLS;
+var SPAWN_VALUES = C.SPAWN_VALUES;
+var WAND_VALUES = C.WAND_VALUES;
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -637,13 +679,28 @@ function restartGame() {
   state.showMenu = false; initState(); state.currentNumber = generateNumber();
 }
 
-var state = state;
-var getCelebTransform = getCelebTransform;
+module.exports = {
+  generateNumber: generateNumber, isBoardFull: isBoardFull,
+  placeNumber: placeNumber, countMergeCells: countMergeCells,
+  runWave: runWave, chainBonuses: chainBonuses,
+  selectPower: selectPower, handlePowerTap: handlePowerTap,
+  handleSupremeTap: handleSupremeTap,
+  onSupremePick: onSupremePick, onCancelSupreme: onCancelSupreme,
+  toggleMenu: toggleMenu, closeMenu: closeMenu, restartGame: restartGame,
+  // Expose state for input/renderer
+  state: state
+};
+var C = require('./constants.js');
+var GL = require('./game-logic.js');
+var state = GL.state;
+var audio = require('./audio.js');
+var anim = require('./animation.js');
+var getCelebTransform = anim.getCelebTransform;
 
 var _ctx = null, _sw = 0, _sh = 0, _sc = 1;
 
 function initRenderer(ctx, screenW, screenH) {
-  _ctx = ctx; _sw = screenW; _sh = screenH; _sc = screenW / DESIGN_W;
+  _ctx = ctx; _sw = screenW; _sh = screenH; _sc = screenW / C.DESIGN_W;
 }
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -658,14 +715,14 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 function fillCellBg(ctx, x, y, w, h, value) {
-  ctx.fillStyle = CELL_COLORS[value] || CELL_COLORS[0];
+  ctx.fillStyle = C.CELL_COLORS[value] || C.CELL_COLORS[0];
   roundRect(ctx, x, y, w, h, 8 * _sc); ctx.fill();
 }
 
 function drawCellText(ctx, x, y, w, h, value) {
   if (value <= 0) return;
-  ctx.fillStyle = getTextColor(value);
-  ctx.font = 'bold ' + (getFontSize(value) * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+  ctx.fillStyle = C.getTextColor(value);
+  ctx.font = 'bold ' + (C.getFontSize(value) * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(String(value), x + w / 2, y + h / 2);
 }
@@ -675,7 +732,7 @@ function drawCellText(ctx, x, y, w, h, value) {
 function render() {
   var ctx = _ctx;
   ctx.clearRect(0, 0, _sw, _sh);
-  ctx.fillStyle = BG_COLOR; ctx.fillRect(0, 0, _sw, _sh);
+  ctx.fillStyle = C.BG_COLOR; ctx.fillRect(0, 0, _sw, _sh);
   drawHeader(); drawControlRow(); drawUpgradeRow(); drawHint();
   drawBoard(); drawCelebration(); drawGameOver(); drawMenu();
 }
@@ -683,21 +740,21 @@ function render() {
 // ─── Header ───────────────────────────────────────────────
 
 function drawHeader() {
-  var ctx = _ctx, y = HEADER_PAD_TOP * _sc, pad = 30 * _sc;
-  ctx.fillStyle = TITLE_COLOR;
+  var ctx = _ctx, y = C.HEADER_PAD_TOP * _sc, pad = 30 * _sc;
+  ctx.fillStyle = C.TITLE_COLOR;
   ctx.font = 'bold ' + (40 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillText('数字合成', pad, y + 10 * _sc);
   var sbW = 130 * _sc, sbH = 70 * _sc, sbX = _sw - sbW - pad;
-  ctx.fillStyle = HEADER_BG; roundRect(ctx, sbX, y, sbW, sbH, 8 * _sc); ctx.fill();
-  ctx.fillStyle = HEADER_TEXT;
+  ctx.fillStyle = C.HEADER_BG; roundRect(ctx, sbX, y, sbW, sbH, 8 * _sc); ctx.fill();
+  ctx.fillStyle = C.HEADER_TEXT;
   ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('分数', sbX + sbW / 2, y + 12 * _sc);
   ctx.font = 'bold ' + (36 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.fillText(String(state.score), sbX + sbW / 2, y + 36 * _sc);
   var btnX = sbX - 66 * _sc, btnW = 56 * _sc, btnH = 56 * _sc;
-  ctx.fillStyle = HEADER_BG; roundRect(ctx, btnX, y + 7 * _sc, btnW, btnH, 8 * _sc); ctx.fill();
-  ctx.fillStyle = HEADER_TEXT;
+  ctx.fillStyle = C.HEADER_BG; roundRect(ctx, btnX, y + 7 * _sc, btnW, btnH, 8 * _sc); ctx.fill();
+  ctx.fillStyle = C.HEADER_TEXT;
   var barW = 32 * _sc, barH = 4 * _sc, barX = btnX + (btnW - barW) / 2;
   for (var i = 0; i < 3; i++) {
     roundRect(ctx, barX, y + 17 * _sc + i * 12 * _sc, barW, barH, 2 * _sc); ctx.fill();
@@ -708,8 +765,8 @@ function drawHeader() {
 
 function drawControlRow() {
   if (state.supremePicker) { drawSupremePicker(); return; }
-  var ctx = _ctx, y = HEADER_H * _sc, cx = _sw / 2;
-  ctx.fillStyle = TITLE_COLOR; ctx.font = (24 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+  var ctx = _ctx, y = C.HEADER_H * _sc, cx = _sw / 2;
+  ctx.fillStyle = C.TITLE_COLOR; ctx.font = (24 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText('下一个数字', cx, y + 4 * _sc);
   var cellS = 90 * _sc, cellX = cx - cellS / 2, cellY = y + 30 * _sc;
@@ -726,9 +783,9 @@ function drawControlRow() {
 function drawPowerBtn(x, y, w, h, type, count) {
   var ctx = _ctx, active = state.activePower === type, empty = count <= 0;
   ctx.globalAlpha = empty ? 0.35 : 1;
-  ctx.fillStyle = active ? POWER_ACTIVE_BG : '#ffffff';
+  ctx.fillStyle = active ? C.POWER_ACTIVE_BG : '#ffffff';
   roundRect(ctx, x, y, w, h, 8 * _sc); ctx.fill();
-  ctx.strokeStyle = active ? POWER_ACTIVE_BORDER : POWER_BORDER;
+  ctx.strokeStyle = active ? C.POWER_ACTIVE_BORDER : C.POWER_BORDER;
   ctx.lineWidth = 2 * _sc; roundRect(ctx, x, y, w, h, 8 * _sc); ctx.stroke();
   var icons = { wand: '🪄', swap: '🔄', clear: '💣' };
   ctx.fillStyle = '#333'; ctx.font = (22 * _sc) + 'px sans-serif';
@@ -740,7 +797,7 @@ function drawPowerBtn(x, y, w, h, type, count) {
 }
 
 function drawSupremePicker() {
-  var ctx = _ctx, y = HEADER_H * _sc;
+  var ctx = _ctx, y = C.HEADER_H * _sc;
   ctx.fillStyle = '#bbada0'; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText(state.hintText, _sw / 2, y + 8 * _sc);
@@ -761,7 +818,7 @@ function drawSupremePicker() {
 
 function drawUpgradeRow() {
   if (state.supremePicker) return;
-  var ctx = _ctx, y = (HEADER_H + CONTROL_H) * _sc;
+  var ctx = _ctx, y = (C.HEADER_H + C.CONTROL_H) * _sc;
   var items = [
     { type: 'supremeWand', label: '至尊魔法棒' },
     { type: 'dragonHand',  label: '龙王的手' },
@@ -772,11 +829,11 @@ function drawUpgradeRow() {
     var it = items[i], bx = sx + i * (bw + 12 * _sc);
     var active = state.activePower === it.type, empty = state[it.type + 'Count'] <= 0;
     ctx.globalAlpha = empty ? 0.35 : 1;
-    ctx.fillStyle = active ? POWER_ACTIVE_BG : '#ffffff';
+    ctx.fillStyle = active ? C.POWER_ACTIVE_BG : '#ffffff';
     roundRect(ctx, bx, y, bw, bh, 20 * _sc); ctx.fill();
-    ctx.strokeStyle = active ? POWER_ACTIVE_BORDER : POWER_BORDER; ctx.lineWidth = 2 * _sc;
+    ctx.strokeStyle = active ? C.POWER_ACTIVE_BORDER : C.POWER_BORDER; ctx.lineWidth = 2 * _sc;
     roundRect(ctx, bx, y, bw, bh, 20 * _sc); ctx.stroke();
-    ctx.fillStyle = TITLE_COLOR; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+    ctx.fillStyle = C.TITLE_COLOR; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(it.label, bx + bw / 2, y + bh / 2); ctx.globalAlpha = 1;
   }
@@ -785,8 +842,8 @@ function drawUpgradeRow() {
 // ─── Hint ─────────────────────────────────────────────────
 
 function drawHint() {
-  var ctx = _ctx, y = (HEADER_H + CONTROL_H + UPGRADE_H) * _sc;
-  ctx.fillStyle = HINT_COLOR; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+  var ctx = _ctx, y = (C.HEADER_H + C.CONTROL_H + C.UPGRADE_H) * _sc;
+  ctx.fillStyle = C.HINT_COLOR; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText(state.hintText, _sw / 2, y + 4 * _sc);
 }
@@ -794,18 +851,18 @@ function drawHint() {
 // ─── Board ────────────────────────────────────────────────
 
 function drawBoard() {
-  var ctx = _ctx, boardTop = BOARD_TOP * _sc - state.scrollY;
-  var cellW = CELL_W * _sc, cellH = CELL_H * _sc, gap = GAP * _sc, rowH = ROW_H * _sc;
-  var totalBoardW = COLS * cellW + (COLS - 1) * gap, boardLeft = (_sw - totalBoardW) / 2;
-  var totalH = ROWS * rowH, visibleH = _sh - BOARD_TOP * _sc;
+  var ctx = _ctx, boardTop = C.BOARD_TOP * _sc - state.scrollY;
+  var cellW = C.CELL_W * _sc, cellH = C.CELL_H * _sc, gap = C.GAP * _sc, rowH = C.ROW_H * _sc;
+  var totalBoardW = C.COLS * cellW + (C.COLS - 1) * gap, boardLeft = (_sw - totalBoardW) / 2;
+  var totalH = C.ROWS * rowH, visibleH = _sh - C.BOARD_TOP * _sc;
   state.maxScrollY = Math.max(0, totalH - visibleH);
-  ctx.save(); ctx.beginPath(); ctx.rect(0, BOARD_TOP * _sc, _sw, visibleH); ctx.clip();
-  for (var r = 0; r < ROWS; r++) {
-    for (var c = 0; c < COLS; c++) {
+  ctx.save(); ctx.beginPath(); ctx.rect(0, C.BOARD_TOP * _sc, _sw, visibleH); ctx.clip();
+  for (var r = 0; r < C.ROWS; r++) {
+    for (var c = 0; c < C.COLS; c++) {
       var cx = boardLeft + c * (cellW + gap), cy = boardTop + r * rowH;
-      if (cy + cellH < BOARD_TOP * _sc || cy > _sh) continue;
+      if (cy + cellH < C.BOARD_TOP * _sc || cy > _sh) continue;
       var key = r + ',' + c, phase = state.dropCells[key], offsetY = 0;
-      if (phase === 'start') offsetY = -(r * ROW_H + 150) * _sc;
+      if (phase === 'start') offsetY = -(r * C.ROW_H + 150) * _sc;
       drawCell(cx, cy + offsetY, cellW, cellH, state.grid[r][c], r, c);
     }
   }
@@ -818,8 +875,8 @@ function drawCell(x, y, w, h, value, row, col) {
   var hl = (state.swapCell && state.swapCell.row === row && state.swapCell.col === col) ||
            (state.supremePicker && state.supremePicker.row === row && state.supremePicker.col === col);
   if (hl) {
-    ctx.save(); ctx.strokeStyle = SWAP_GLOW; ctx.lineWidth = 4 * _sc;
-    ctx.shadowColor = SWAP_GLOW; ctx.shadowBlur = 12 * _sc;
+    ctx.save(); ctx.strokeStyle = C.SWAP_GLOW; ctx.lineWidth = 4 * _sc;
+    ctx.shadowColor = C.SWAP_GLOW; ctx.shadowBlur = 12 * _sc;
     roundRect(ctx, x, y, w, h, 8 * _sc); ctx.stroke(); ctx.restore();
   }
   drawCellText(ctx, x, y, w, h, value);
@@ -836,7 +893,7 @@ function drawCelebration() {
   ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.font = 'bold ' + (56 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(state.celebration, 2 * _sc, 2 * _sc);
-  ctx.fillStyle = CELEB_COLOR;
+  ctx.fillStyle = C.CELEB_COLOR;
   ctx.fillText(state.celebration, 0, 0);
   ctx.restore();
 }
@@ -846,16 +903,16 @@ function drawCelebration() {
 function drawGameOver() {
   if (!state.gameOver) return;
   var ctx = _ctx;
-  ctx.fillStyle = OVERLAY_BG; ctx.fillRect(0, 0, _sw, _sh);
+  ctx.fillStyle = C.OVERLAY_BG; ctx.fillRect(0, 0, _sw, _sh);
   var bw = 380 * _sc, bh = 280 * _sc, bx = (_sw - bw) / 2, by = (_sh - bh) / 2;
   ctx.fillStyle = '#ffffff'; roundRect(ctx, bx, by, bw, bh, 12 * _sc); ctx.fill();
-  ctx.fillStyle = TITLE_COLOR; ctx.font = 'bold ' + (48 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+  ctx.fillStyle = C.TITLE_COLOR; ctx.font = 'bold ' + (48 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('游戏结束', _sw / 2, by + 70 * _sc);
   ctx.font = (32 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.fillText('得分: ' + state.score, _sw / 2, by + 140 * _sc);
   var btnW = 200 * _sc, btnH = 56 * _sc, btnX = (_sw - btnW) / 2, btnY = by + 190 * _sc;
-  ctx.fillStyle = NEWGAME_BG; roundRect(ctx, btnX, btnY, btnW, btnH, 8 * _sc); ctx.fill();
+  ctx.fillStyle = C.NEWGAME_BG; roundRect(ctx, btnX, btnY, btnW, btnH, 8 * _sc); ctx.fill();
   ctx.fillStyle = '#f9f6f2'; ctx.font = (28 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.fillText('重新开始', _sw / 2, btnY + btnH / 2);
 }
@@ -868,11 +925,11 @@ function drawMenu() {
   ctx.fillStyle = 'rgba(0,0,0,0.01)'; ctx.fillRect(0, 0, _sw, _sh);
   var mw = 280 * _sc, mx = _sw - 30 * _sc - mw, my = 100 * _sc, itemH = 56 * _sc;
   ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 24 * _sc; ctx.shadowOffsetY = 6 * _sc;
-  ctx.fillStyle = MENU_BG; roundRect(ctx, mx, my, mw, itemH * 4, 10 * _sc); ctx.fill(); ctx.restore();
+  ctx.fillStyle = C.MENU_BG; roundRect(ctx, mx, my, mw, itemH * 4, 10 * _sc); ctx.fill(); ctx.restore();
   var items = [{ label: '音效', type: 'sfx' }, { label: '背景音乐', type: 'bgm' }, { label: '重新开始', type: 'restart' }];
   for (var i = 0; i < items.length; i++) {
     var iy = my + i * itemH, item = items[i];
-    ctx.fillStyle = TITLE_COLOR; ctx.font = (28 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+    ctx.fillStyle = C.TITLE_COLOR; ctx.font = (28 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(item.label, mx + 30 * _sc, iy + itemH / 2);
     if (item.type === 'sfx' || item.type === 'bgm') {
@@ -888,15 +945,55 @@ function drawMenu() {
 
 function drawToggle(x, y, on) {
   var ctx = _ctx, tw = 64 * _sc, th = 36 * _sc, kr = 14 * _sc;
-  ctx.fillStyle = on ? TOGGLE_ON_BG : TOGGLE_OFF_BG; roundRect(ctx, x, y, tw, th, 18 * _sc); ctx.fill();
+  ctx.fillStyle = on ? C.TOGGLE_ON_BG : C.TOGGLE_OFF_BG; roundRect(ctx, x, y, tw, th, 18 * _sc); ctx.fill();
   var kx = on ? x + tw - 4 * _sc - kr * 2 : x + 4 * _sc;
   ctx.fillStyle = '#ffffff'; ctx.beginPath();
   ctx.arc(kx + kr, y + (th - kr * 2) / 2 + kr, kr, 0, Math.PI * 2); ctx.fill();
 }
 
+module.exports = { initRenderer: initRenderer, render: render };
+var C = require('./constants.js');
+var GL = require('./game-logic.js');
+var state = GL.state;
+var audio = require('./audio.js');
+
+var _sw = 0, _sc = 1;
+var _touchStartX = 0, _touchStartY = 0, _touchStartTime = 0;
+var _isScrolling = false, _scrollBaseY = 0, _lastDy = 0, _lastTime = 0;
+
+function initInput(screenW) {
+  _sw = screenW; _sc = screenW / C.DESIGN_W;
+
+  wx.onTouchStart(function(e) {
+    var t = e.touches[0];
+    _touchStartX = t.clientX; _touchStartY = t.clientY; _touchStartTime = Date.now();
+    _isScrolling = false; _scrollBaseY = state.scrollY; _lastDy = 0; _lastTime = _touchStartTime;
+  });
+
+  wx.onTouchMove(function(e) {
+    var t = e.touches[0], dy = _touchStartY - t.clientY;
+    if (!_isScrolling && Math.abs(dy) > 8 && Math.abs(_touchStartX - t.clientX) < Math.abs(dy) * 2) _isScrolling = true;
+    if (_isScrolling) {
+      state.scrollY = _scrollBaseY + dy;
+      if (state.scrollY < 0) state.scrollY = 0;
+      if (state.scrollY > state.maxScrollY) state.scrollY = state.maxScrollY;
+      _lastDy = t.clientY - _touchStartY; _lastTime = Date.now();
+    }
+  });
+
+  wx.onTouchEnd(function(e) {
+    if (_isScrolling) {
+      var dt = Date.now() - _lastTime;
+      if (dt > 0 && dt < 100) state.scrollVelocity = -_lastDy / dt * 16;
+      return;
+    }
+    if (Date.now() - _touchStartTime > 300) return;
+    hitTest(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+  });
+}
 
 function hitTest(x, y) {
-  if (state.gameOver) { restartGame(); return; }
+  if (state.gameOver) { GL.restartGame(); return; }
   if (state.showMenu) {
     var mh = hitMenu(x, y);
     if (mh) { handleMenuHit(mh); return; }
@@ -904,23 +1001,23 @@ function hitTest(x, y) {
   }
   if (state.supremePicker) {
     var pv = hitSupremePicker(x, y);
-    if (pv === 'exit') { onCancelSupreme(); return; }
-    if (pv > 0) { onSupremePick(pv); return; }
+    if (pv === 'exit') { GL.onCancelSupreme(); return; }
+    if (pv > 0) { GL.onSupremePick(pv); return; }
   }
-  if (hitMenuBtn(x, y)) { toggleMenu(); return; }
-  var pw = hitPowerBtn(x, y); if (pw) { selectPower(pw); return; }
-  var up = hitUpgradeBtn(x, y); if (up) { selectPower(up); return; }
+  if (hitMenuBtn(x, y)) { GL.toggleMenu(); return; }
+  var pw = hitPowerBtn(x, y); if (pw) { GL.selectPower(pw); return; }
+  var up = hitUpgradeBtn(x, y); if (up) { GL.selectPower(up); return; }
   var cell = hitCell(x, y);
   if (cell) { handleCellTap(cell.row, cell.col); return; }
 }
 
 function hitMenuBtn(x, y) {
-  var bx = _sw - 66 * _sc - 56 * _sc, by = HEADER_PAD_TOP * _sc + 7 * _sc;
+  var bx = _sw - 66 * _sc - 56 * _sc, by = C.HEADER_PAD_TOP * _sc + 7 * _sc;
   return x >= bx && x <= bx + 56 * _sc && y >= by && y <= by + 56 * _sc;
 }
 
 function hitPowerBtn(x, y) {
-  var py = HEADER_H * _sc + 10 * _sc, pw = 64 * _sc, px = _sw - 30 * _sc - pw;
+  var py = C.HEADER_H * _sc + 10 * _sc, pw = 64 * _sc, px = _sw - 30 * _sc - pw;
   var powers = ['wand', 'swap', 'clear'];
   for (var i = 0; i < powers.length; i++) {
     var bx = px - i * (pw + 8 * _sc);
@@ -930,7 +1027,7 @@ function hitPowerBtn(x, y) {
 }
 
 function hitUpgradeBtn(x, y) {
-  var by = (HEADER_H + CONTROL_H) * _sc, bw = 150 * _sc, bh = 46 * _sc;
+  var by = (C.HEADER_H + C.CONTROL_H) * _sc, bw = 150 * _sc, bh = 46 * _sc;
   var items = ['supremeWand', 'dragonHand', 'immortal'];
   var totalW = items.length * bw + 2 * 12 * _sc, sx = (_sw - totalW) / 2;
   for (var i = 0; i < items.length; i++) {
@@ -941,11 +1038,11 @@ function hitUpgradeBtn(x, y) {
 }
 
 function hitCell(x, y) {
-  var cellW = CELL_W * _sc, cellH = CELL_H * _sc, gap = GAP * _sc, rowH = ROW_H * _sc;
-  var totalW = COLS * cellW + (COLS - 1) * gap;
-  var bl = (_sw - totalW) / 2, bt = BOARD_TOP * _sc - state.scrollY;
-  for (var r = 0; r < ROWS; r++) {
-    for (var c = 0; c < COLS; c++) {
+  var cellW = C.CELL_W * _sc, cellH = C.CELL_H * _sc, gap = C.GAP * _sc, rowH = C.ROW_H * _sc;
+  var totalW = C.COLS * cellW + (C.COLS - 1) * gap;
+  var bl = (_sw - totalW) / 2, bt = C.BOARD_TOP * _sc - state.scrollY;
+  for (var r = 0; r < C.ROWS; r++) {
+    for (var c = 0; c < C.COLS; c++) {
       var cx = bl + c * (cellW + gap), cy = bt + r * rowH;
       if (x >= cx && x <= cx + cellW && y >= cy && y <= cy + cellH) return { row: r, col: c };
     }
@@ -954,7 +1051,7 @@ function hitCell(x, y) {
 }
 
 function hitSupremePicker(x, y) {
-  var py = HEADER_H * _sc + 30 * _sc, exitS = 50 * _sc, ecx = 20 * _sc + exitS / 2, ecy = py + exitS / 2;
+  var py = C.HEADER_H * _sc + 30 * _sc, exitS = 50 * _sc, ecx = 20 * _sc + exitS / 2, ecy = py + exitS / 2;
   if ((x - ecx) * (x - ecx) + (y - ecy) * (y - ecy) <= (exitS / 2) * (exitS / 2)) return 'exit';
   var ow = 90 * _sc, oh = 70 * _sc, sx = 20 * _sc + exitS + 16 * _sc;
   var opts = state.supremePicker.options;
@@ -977,34 +1074,32 @@ function hitMenu(x, y) {
 function handleMenuHit(type) {
   if (type === 'sfx') audio.toggleSfx();
   else if (type === 'bgm') audio.toggleBgm();
-  else if (type === 'restart') restartGame();
+  else if (type === 'restart') GL.restartGame();
 }
 
 function handleCellTap(row, col) {
   if (state.gameOver) return;
-  if (state.supremePicker) { handleSupremeTap(row, col); return; }
-  if (state.activePower) { handlePowerTap(row, col); return; }
-  if (!placeNumber(col, state.currentNumber)) {
-    if (isBoardFull()) state.gameOver = true;
+  if (state.supremePicker) { GL.handleSupremeTap(row, col); return; }
+  if (state.activePower) { GL.handlePowerTap(row, col); return; }
+  if (!GL.placeNumber(col, state.currentNumber)) {
+    if (GL.isBoardFull()) state.gameOver = true;
     return;
   }
-  var mc = countMergeCells();
-  state.currentNumber = generateNumber();
-  state.gameOver = isBoardFull();
-  runWave(function() { chainBonuses(mc); });
+  var mc = GL.countMergeCells();
+  state.currentNumber = GL.generateNumber();
+  state.gameOver = GL.isBoardFull();
+  GL.runWave(function() { GL.chainBonuses(mc); });
 }
 
-
-function gameLoop(timestamp) {
-  var now = timestamp || Date.now();
-  updateAnim(now);
-  processActions(now);
-  updateScrollInertia();
-  render();
-  requestAnimationFrame(gameLoop);
-}
-
-
+module.exports = { initInput: initInput };
+var stateModule = require('./state.js');
+var state = stateModule.state;
+var initState = stateModule.initState;
+var audio = require('./audio.js');
+var renderer = require('./renderer.js');
+var input = require('./input.js');
+var anim = require('./animation.js');
+var GL = require('./game-logic.js');
 
 function init() {
   var sysInfo = wx.getSystemInfoSync();
@@ -1016,14 +1111,14 @@ function init() {
   canvas.width = screenW * dpr;
   canvas.height = screenH * dpr;
 
-  var ctx = canvas.getContext("2d");
+  var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
   initState();
   audio.init();
-  initRenderer(ctx, screenW, screenH);
-  initInput(screenW);
-  state.currentNumber = generateNumber();
+  renderer.initRenderer(ctx, screenW, screenH);
+  input.initInput(screenW);
+  state.currentNumber = GL.generateNumber();
 
   wx.onShow(function() { if (audio.bgmEnabled) audio.playBgm(); });
   wx.onHide(function() { audio.pauseBgm(); });
@@ -1031,5 +1126,13 @@ function init() {
   requestAnimationFrame(gameLoop);
 }
 
-// === Init ===
-init();
+function gameLoop(timestamp) {
+  var now = timestamp || Date.now();
+  anim.updateAnim(now);
+  anim.processActions(now);
+  anim.updateScrollInertia();
+  renderer.render();
+  requestAnimationFrame(gameLoop);
+}
+
+module.exports = { init: init };
