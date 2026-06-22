@@ -1,140 +1,120 @@
+// 数字合成 - 微信小游戏
+console.log('[GAME] Starting...');
+
+try {
+  var canvas = wx.createCanvas();
+  console.log('[GAME] Canvas created:', canvas.width, 'x', canvas.height);
+} catch(e) {
+  console.error('[GAME] wx.createCanvas failed:', e);
+}
+
+var ctx = null;
+try {
+  ctx = canvas.getContext('2d');
+  console.log('[GAME] 2D context obtained');
+} catch(e) {
+  console.error('[GAME] getContext failed:', e);
+}
+
+var sysInfo = wx.getSystemInfoSync();
+var W = sysInfo.windowWidth;
+var H = sysInfo.windowHeight;
+console.log('[GAME] Screen:', W, 'x', H);
+
+ctx.fillStyle = '#faf8ef';
+ctx.fillRect(0, 0, W, H);
+console.log('[GAME] Background filled');
+
+// ========================
+// CONSTANTS
+// ========================
 var ROWS = 11;
 var COLS = 6;
 var CELL_W = 110;
 var CELL_H = 90;
 var GAP = 6;
 var ROW_H = CELL_H + GAP;
+var DESIGN_W = 750;
+var SCALE = W / DESIGN_W;
 
 var SPAWN_VALUES = [2, 4, 8, 16, 32];
-var WAND_VALUES = [2, 4, 8, 16, 32, 64];
+var WAND_VALUES  = [2, 4, 8, 16, 32, 64];
 
-var CELL_COLORS = {
-  0:    '#cdc1b4', 2:    '#eee4da', 4:    '#ede0c8',
-  8:    '#f2b179', 16:   '#f59563', 32:   '#f67c5f',
-  64:   '#f65e3b', 128:  '#edcf72', 256:  '#edcc61',
-  512:  '#edc850', 1024: '#edc53f', 2048: '#edc22e'
-};
+var COLORS = {};
+COLORS[0]    = '#cdc1b4';
+COLORS[2]    = '#eee4da';
+COLORS[4]    = '#ede0c8';
+COLORS[8]    = '#f2b179';
+COLORS[16]   = '#f59563';
+COLORS[32]   = '#f67c5f';
+COLORS[64]   = '#f65e3b';
+COLORS[128]  = '#edcf72';
+COLORS[256]  = '#edcc61';
+COLORS[512]  = '#edc850';
+COLORS[1024] = '#edc53f';
+COLORS[2048] = '#edc22e';
 
-var TEXT_DARK  = '#776e65';
+var TEXT_DARK = '#776e65';
 var TEXT_LIGHT = '#f9f6f2';
 
-function getTextColor(value) { return (value <= 4) ? TEXT_DARK : TEXT_LIGHT; }
-
-function getFontSize(value) {
-  if (value >= 1024) return 20; if (value >= 512) return 22;
-  if (value >= 256)  return 24; if (value >= 128) return 24;
-  return 28;
-}
-
-var BG_COLOR              = '#faf8ef';
-var HEADER_BG             = '#bbada0';
-var HEADER_TEXT           = '#f9f6f2';
-var TITLE_COLOR           = '#776e65';
-var HINT_COLOR            = '#bbada0';
-var OVERLAY_BG            = 'rgba(238,228,218,0.73)';
-var MENU_BG               = '#ffffff';
-var POWER_BORDER          = '#e8e0d8';
-var POWER_ACTIVE_BORDER   = '#8f7a66';
-var POWER_ACTIVE_BG       = '#f5f0eb';
-var TOGGLE_ON_BG          = '#8f7a66';
-var TOGGLE_OFF_BG         = '#cdc1b4';
-var CELEB_COLOR           = '#f65e3b';
-var SWAP_GLOW             = '#f2b179';
-var NEWGAME_BG            = '#8f7a66';
-
-var HEADER_PAD_TOP = 20;
-var HEADER_H = 100;
-var CONTROL_H = 110;
-var UPGRADE_H = 56;
-var HINT_H = 40;
-var BOARD_TOP = HEADER_H + CONTROL_H + UPGRADE_H + HINT_H;
-var DESIGN_W = 750;
-
-var BGM_PATH   = '/assets/audio/bgm.mp3';
-var DROP_PATH  = '/assets/audio/drop.mp3';
-var MERGE_PATH = '/assets/audio/merge.mp3';
-
-
-
+// ========================
+// STATE
+// ========================
 var state = {};
 
 function initState() {
-  var grid = [];
-  for (var r = 0; r < ROWS; r++) {
-    var row = [];
-    for (var c = 0; c < COLS; c++) row.push(0);
-    grid.push(row);
-  }
-  state.grid = grid;
+  var g = [];
+  for (var r = 0; r < ROWS; r++) { var row = []; for (var c = 0; c < COLS; c++) row.push(0); g.push(row); }
+  state.grid = g;
   state.score = 0;
   state.currentNumber = 2;
   state.gameOver = false;
   state.celebration = '';
   state.celebTime = 0;
-
-  state.wandCount = 3;
-  state.swapCount = 3;
-  state.clearCount = 3;
-  state.supremeWandCount = 1;
-  state.dragonHandCount = 1;
-  state.immortalCount = 1;
-
+  state.wandCount = 3; state.swapCount = 3; state.clearCount = 3;
+  state.supremeWandCount = 1; state.dragonHandCount = 1; state.immortalCount = 1;
   state.activePower = '';
   state.hintText = '点击下方列放入数字';
-  state.supremePicker = null;
-  state.swapCell = null;
-  state.showMenu = false;
-
-  state.dropCells = {};
-  state.mergeCells = {};
+  state.supremePicker = null; state.swapCell = null; state.showMenu = false;
+  state.dropCells = {}; state.mergeCells = {};
   state._activeCol = -1;
-
-  state.scrollY = 0;
-  state.maxScrollY = 0;
-  state.scrollVelocity = 0;
-
-  state.sfxEnabled = true;
-  state.bgmEnabled = false;
-
+  state.scrollY = 0; state.maxScrollY = 0; state.scrollVelocity = 0;
   state._dragonDrops = 0;
 }
 
-
+// ========================
+// ANIMATION
+// ========================
 var tweens = [];
 var pendingActions = [];
 var _nextAnimId = 0;
 
-function scheduleAction(delayMs, callback) {
-  pendingActions.push({ time: Date.now() + delayMs, callback: callback });
+function scheduleAction(delayMs, cb) {
+  pendingActions.push({ time: Date.now() + delayMs, cb: cb });
 }
 
-function addTween(type, data, durationMs) {
-  tweens.push({ id: _nextAnimId++, type: type, startTime: Date.now(), duration: durationMs, progress: 0, data: data });
+function addTween(type, data, dur) {
+  tweens.push({ id: _nextAnimId++, type: type, start: Date.now(), dur: dur, prog: 0, data: data });
 }
 
-function updateAnim(now) {
-  var active = [];
+function updateTweens(now) {
+  var a = [];
   for (var i = 0; i < tweens.length; i++) {
-    var t = tweens[i];
-    t.progress = Math.min(1, (now - t.startTime) / t.duration);
-    if (t.progress < 1) active.push(t);
+    var t = tweens[i]; t.prog = Math.min(1, (now - t.start) / t.dur);
+    if (t.prog < 1) a.push(t);
   }
-  tweens = active;
+  tweens = a;
 }
 
-function processActions(now) {
-  var remaining = [];
+function runActions(now) {
+  var r = [];
   for (var i = 0; i < pendingActions.length; i++) {
-    if (now >= pendingActions[i].time) {
-      pendingActions[i].callback();
-    } else {
-      remaining.push(pendingActions[i]);
-    }
+    if (now >= pendingActions[i].time) { pendingActions[i].cb(); } else { r.push(pendingActions[i]); }
   }
-  pendingActions = remaining;
+  pendingActions = r;
 }
 
-function updateScrollInertia() {
+function updateScroll() {
   if (Math.abs(state.scrollVelocity) < 0.5) { state.scrollVelocity = 0; return; }
   state.scrollVelocity *= 0.92;
   state.scrollY -= state.scrollVelocity;
@@ -142,155 +122,62 @@ function updateScrollInertia() {
   if (state.scrollY > state.maxScrollY) state.scrollY = state.maxScrollY;
 }
 
-function easeOutQuad(t) { return t * (2 - t); }
-function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeOut(t) { return t * (2 - t); }
 
-function getCelebTransform(progress) {
-  if (progress < 0.25) {
-    var p = progress / 0.25;
-    return { scale: 0.3 + 0.9 * easeOutQuad(p), alpha: easeOutQuad(p) };
-  } else if (progress < 0.5) {
-    return { scale: 1.2 - 0.2 * p, alpha: 1 };
-  } else {
-    return { scale: 1.0 - 0.2 * easeOutQuad(p), alpha: 1 - easeOutQuad(p) };
-  }
+function celebTransform(p) {
+  if (p < 0.25) { var q = p / 0.25; return { s: 0.3 + 0.9 * easeOut(q), a: easeOut(q) }; }
+  else if (p < 0.5) { var q = (p - 0.25) / 0.25; return { s: 1.2 - 0.2 * q, a: 1 }; }
+  else { var q = (p - 0.5) / 0.5; return { s: 1.0 - 0.2 * easeOut(q), a: 1 - easeOut(q) }; }
 }
 
-
-
+// ========================
+// AUDIO (stubs)
+// ========================
 var audio = {
-  sfxEnabled: true,
-  bgmEnabled: false,
-  _bgm: null,
-
-  init: function() {
-    var prefs = null;
-    try { prefs = wx.getStorageSync('audioPrefs'); } catch (e) {}
-    if (prefs) {
-      this.sfxEnabled = prefs.sfxEnabled !== false;
-      this.bgmEnabled = prefs.bgmEnabled === true;
-    }
-  },
-
-  _save: function() {
-    try { wx.setStorageSync('audioPrefs', { sfxEnabled: this.sfxEnabled, bgmEnabled: this.bgmEnabled }); } catch (e) {}
-  },
-
-  _fileExists: function(path) {
-    try { wx.getFileSystemManager().accessSync(path); return true; } catch (e) { return false; }
-  },
-
-  _playSfx: function(path) {
-    if (!this.sfxEnabled) return;
-    if (!this._fileExists(path)) return;
-    var ctx = wx.createInnerAudioContext();
-    ctx.src = path;
-    ctx.volume = 0.6;
-    ctx.onEnded(function() { ctx.destroy(); });
-    ctx.onError(function() { ctx.destroy(); });
-    ctx.play();
-  },
-
-  playBgm: function() {
-    if (!this.bgmEnabled) return;
-    if (!this._fileExists(BGM_PATH)) return;
-    if (!this._bgm) {
-      this._bgm = wx.createInnerAudioContext();
-      this._bgm.src = BGM_PATH;
-      this._bgm.loop = true;
-      this._bgm.volume = 0.4;
-    }
-    this._bgm.play();
-  },
-
-  pauseBgm: function() { if (this._bgm) this._bgm.pause(); },
-
-  playDrop:  function() { this._playSfx(DROP_PATH); },
-  playMerge: function() { this._playSfx(MERGE_PATH); },
-
-  toggleSfx: function() { this.sfxEnabled = !this.sfxEnabled; this._save(); },
-  toggleBgm: function() {
-    this.bgmEnabled = !this.bgmEnabled; this._save();
-    if (this.bgmEnabled) this.playBgm(); else this.pauseBgm();
-  }
+  sfxEnabled: true, bgmEnabled: false, _bgm: null,
+  init: function() {},
+  playBgm: function() {}, pauseBgm: function() {},
+  playDrop: function() {}, playMerge: function() {},
+  toggleSfx: function() { this.sfxEnabled = !this.sfxEnabled; },
+  toggleBgm: function() { this.bgmEnabled = !this.bgmEnabled; }
 };
 
-
-
-
-// ─── Helpers ────────────────────────────────────────────────
-
-function getBonusCount(mergeCount) {
-  if (mergeCount >= 10) return 8 + Math.floor(Math.random() * 3);
-  if (mergeCount >= 5)  return 5 + Math.floor(Math.random() * 2);
-  if (mergeCount >= 3)  return 2 + Math.floor(Math.random() * 2);
-  return 0;
-}
-
-function getCelebration(mergeCount) {
-  if (mergeCount >= 10) return '太厉害了!';
-  if (mergeCount >= 5)  return '真棒!';
-  return '不错!';
-}
-
+// ========================
+// GAME LOGIC
+// ========================
 function generateNumber() {
   return SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
 }
 
-function countMergeCells() {
-  var mc = 0;
-  for (var k in state.mergeCells) mc++;
-  return mc;
-}
-
-function showCelebration(text, duration) {
-  state.celebration = text;
-  state.celebTime = Date.now();
-  addTween('celebration', null, 900);
-  scheduleAction(duration, function() { state.celebration = ''; });
-}
-
-// ─── Core ──────────────────────────────────────────────────
-
 function isBoardFull() {
-  for (var r = 0; r < ROWS; r++)
-    for (var c = 0; c < COLS; c++)
-      if (state.grid[r][c] === 0) return false;
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) if (state.grid[r][c] === 0) return false;
   return true;
 }
 
 function placeNumber(col, value) {
-  var targetRow = -1;
-  for (var r = ROWS - 1; r >= 0; r--) {
-    if (state.grid[r][col] === 0) { targetRow = r; break; }
-  }
-  if (targetRow === -1) return false;
-  state.grid[targetRow][col] = value;
+  var tr = -1;
+  for (var r = ROWS - 1; r >= 0; r--) { if (state.grid[r][col] === 0) { tr = r; break; } }
+  if (tr === -1) return false;
+  state.grid[tr][col] = value;
   state.dropCells = {};
-  state.dropCells[targetRow + ',' + col] = 'start';
+  state.dropCells[tr + ',' + col] = 'start';
   state.mergeCells = {};
   state._activeCol = col;
-  processMerges(targetRow, col);
+  processMerges(tr, col);
   applyGravity();
   while (scanAndMerge()) { applyGravity(); }
   return true;
 }
 
 function processMerges(row, col) {
-  var value = state.grid[row][col];
-  if (value === 0) return;
-  var dirs = [[1, 0], [-1, 0], [0, -1], [0, 1]];
-  for (var d = 0; d < dirs.length; d++) {
+  var v = state.grid[row][col]; if (v === 0) return;
+  var dirs = [[1,0],[-1,0],[0,-1],[0,1]];
+  for (var d = 0; d < 4; d++) {
     var nr = row + dirs[d][0], nc = col + dirs[d][1];
-    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
-      if (state.grid[nr][nc] === value) {
-        state.grid[row][col] = value * 2;
-        state.grid[nr][nc] = 0;
-        state.score += value * 2;
-        state.mergeCells[row + ',' + col] = true;
-        processMerges(row, col);
-        return;
-      }
+    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && state.grid[nr][nc] === v) {
+      state.grid[row][col] = v * 2; state.grid[nr][nc] = 0; state.score += v * 2;
+      state.mergeCells[row + ',' + col] = true;
+      processMerges(row, col); return;
     }
   }
 }
@@ -299,10 +186,7 @@ function applyGravity() {
   for (var c = 0; c < COLS; c++) {
     var w = ROWS - 1;
     for (var r = ROWS - 1; r >= 0; r--) {
-      if (state.grid[r][c] !== 0) {
-        if (r !== w) { state.grid[w][c] = state.grid[r][c]; state.grid[r][c] = 0; }
-        w--;
-      }
+      if (state.grid[r][c] !== 0) { if (r !== w) { state.grid[w][c] = state.grid[r][c]; state.grid[r][c] = 0; } w--; }
     }
   }
 }
@@ -311,8 +195,7 @@ function scanAndMerge() {
   var merged = false;
   for (var r = 0; r < ROWS; r++) {
     for (var c = 0; c < COLS; c++) {
-      var v = state.grid[r][c];
-      if (v === 0) continue;
+      var v = state.grid[r][c]; if (v === 0) continue;
       if (r + 1 < ROWS && state.grid[r + 1][c] === v) {
         state.grid[r][c] = v * 2; state.grid[r + 1][c] = 0; state.score += v * 2;
         state.mergeCells[r + ',' + c] = true; merged = true;
@@ -332,308 +215,256 @@ function scanAndMerge() {
   return merged;
 }
 
+function countMergeCells() { var n = 0; for (var k in state.mergeCells) n++; return n; }
+
+function getBonusCount(mc) {
+  if (mc >= 10) return 8 + Math.floor(Math.random() * 3);
+  if (mc >= 5)  return 5 + Math.floor(Math.random() * 2);
+  if (mc >= 3)  return 2 + Math.floor(Math.random() * 2);
+  return 0;
+}
+
+function getCelebration(mc) {
+  if (mc >= 10) return '太厉害了!'; if (mc >= 5) return '真棒!'; return '不错!';
+}
+
+function showCeleb(text, dur) {
+  state.celebration = text; state.celebTime = Date.now();
+  addTween('celeb', null, 900);
+  scheduleAction(dur, function() { state.celebration = ''; });
+}
+
 function spawnBonuses(count) {
   state.dropCells = {}; state.mergeCells = {};
   var placed = [];
   for (var i = 0; i < count; i++) {
-    var availCols = [];
-    for (var c = 0; c < COLS; c++) if (state.grid[0][c] === 0) availCols.push(c);
-    if (availCols.length === 0) break;
-    var col = availCols[Math.floor(Math.random() * availCols.length)];
-    for (var r = ROWS - 1; r >= 0; r--) { if (state.grid[r][col] === 0) { targetRow = r; break; } }
-    if (targetRow === -1) continue;
-    state.grid[targetRow][col] = value;
-    state.dropCells[targetRow + ',' + col] = 'start';
-    placed.push({ row: targetRow, col: col });
+    var cols = [];
+    for (var c = 0; c < COLS; c++) if (state.grid[0][c] === 0) cols.push(c);
+    if (cols.length === 0) break;
+    var col = cols[Math.floor(Math.random() * cols.length)];
+    var val = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
+    var tr = -1;
+    for (var r = ROWS - 1; r >= 0; r--) if (state.grid[r][col] === 0) { tr = r; break; }
+    if (tr === -1) continue;
+    state.grid[tr][col] = val; state.dropCells[tr + ',' + col] = 'start';
+    placed.push({ r: tr, c: col });
   }
   if (placed.length === 0) return 0;
-  for (var p = 0; p < placed.length; p++) processMerges(placed[p].row, placed[p].col);
-  applyGravity();
-  while (scanAndMerge()) applyGravity();
-  return mc;
+  for (var p = 0; p < placed.length; p++) processMerges(placed[p].r, placed[p].c);
+  applyGravity(); while (scanAndMerge()) applyGravity();
+  return countMergeCells();
 }
 
-function runWave(callback, speed) {
-  var spd = speed || 1;
+function runWave(cb, spd) {
+  spd = spd || 1;
   audio.playDrop();
-  var hasMerge = false;
-  for (var k in state.mergeCells) { hasMerge = true; break; }
-  if (hasMerge) audio.playMerge();
+  var hm = false; for (var k in state.mergeCells) { hm = true; break; }
+  if (hm) audio.playMerge();
   scheduleAction(Math.floor(50 / spd), function() {
     for (var k in state.dropCells) state.dropCells[k] = 'fall';
   });
   scheduleAction(Math.floor(350 / spd), function() {
-    state.dropCells = {}; state.mergeCells = {};
-    if (callback) callback();
+    state.dropCells = {}; state.mergeCells = {}; if (cb) cb();
   });
 }
 
-// ─── Bonuses ───────────────────────────────────────────────
-
-function chainBonuses(mergeCount) {
-  var bonus = getBonusCount(mergeCount);
+function chainBonuses(mc) {
+  var bonus = getBonusCount(mc);
   if (bonus === 0 || state.gameOver) return;
-  if (Math.random() < 0.2) { triggerSurprise(mergeCount); return; }
-  var newMerges = spawnBonuses(bonus);
-  var hasDrops = false;
-  for (var k in state.dropCells) { hasDrops = true; break; }
-  if (!hasDrops) return;
+  if (Math.random() < 0.2) { triggerSurprise(mc); return; }
+  var nm = spawnBonuses(bonus);
+  var hd = false; for (var k in state.dropCells) { hd = true; break; }
+  if (!hd) return;
   state.gameOver = isBoardFull();
-  showCelebration(getCelebration(mergeCount), 1500);
-  runWave(function() { chainBonuses(newMerges); });
+  showCeleb(getCelebration(mc), 1500);
+  runWave(function() { chainBonuses(nm); });
 }
 
-function triggerSurprise(mergeCount) {
+function triggerSurprise(mc) {
   var r = Math.random();
   if (r < 0.25) {
-    for (var row = 0; row < ROWS; row++)
-      for (var col = 0; col < COLS; col++)
-        if (state.grid[row][col] === 0) state.grid[row][col] = 2;
-    state.mergeCells = {};
-    applyGravity(); while (scanAndMerge()) applyGravity();
-    state.gameOver = isBoardFull();
-    showCelebration('惊喜！填满2', 2000);
+    for (var row = 0; row < ROWS; row++) for (var col = 0; col < COLS; col++) if (state.grid[row][col] === 0) state.grid[row][col] = 2;
+    state.mergeCells = {}; applyGravity(); while (scanAndMerge()) applyGravity();
+    state.gameOver = isBoardFull(); showCeleb('惊喜！填满2', 2000);
   } else if (r < 0.5) {
-    var minVal = Infinity, secondMin = Infinity;
-    for (var row = 0; row < ROWS; row++) {
-      for (var col = 0; col < COLS; col++) {
-        if (v > 0 && v < minVal) { secondMin = minVal; minVal = v; }
-        else if (v > minVal && v < secondMin) secondMin = v;
-      }
+    var mn = Infinity, sm = Infinity;
+    for (var row = 0; row < ROWS; row++) for (var col = 0; col < COLS; col++) {
+      var v = state.grid[row][col];
+      if (v > 0 && v < mn) { sm = mn; mn = v; } else if (v > mn && v < sm) sm = v;
     }
-    if (secondMin === Infinity) secondMin = minVal * 2;
-    for (var row2 = 0; row2 < ROWS; row2++)
-      for (var col2 = 0; col2 < COLS; col2++)
-        if (state.grid[row2][col2] === minVal) state.grid[row2][col2] = secondMin;
-    showCelebration('惊喜！数字升级', 2000);
+    if (sm === Infinity) sm = mn * 2;
+    for (var row = 0; row < ROWS; row++) for (var col = 0; col < COLS; col++) if (state.grid[row][col] === mn) state.grid[row][col] = sm;
+    showCeleb('惊喜！数字升级', 2000);
   } else if (r < 0.75) {
-    var startCol = Math.floor(Math.random() * (COLS - 2));
+    var sc = Math.floor(Math.random() * (COLS - 2));
     state.dropCells = {}; state.mergeCells = {};
-    for (var ci = startCol; ci < startCol + 3; ci++) {
+    for (var ci = sc; ci < sc + 3; ci++) {
       for (var ri = 0; ri < 5; ri++) {
         if (state.grid[0][ci] !== 0) break;
         var val = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
-        var tr = -1;
-        for (var rr = ROWS - 1; rr >= 0; rr--) if (state.grid[rr][ci] === 0) { tr = rr; break; }
+        var tr = -1; for (var rr = ROWS - 1; rr >= 0; rr--) if (state.grid[rr][ci] === 0) { tr = rr; break; }
         if (tr === -1) break;
         state.grid[tr][ci] = val; state.dropCells[tr + ',' + ci] = 'start';
       }
     }
-    state.gameOver = isBoardFull();
-    showCelebration('惊喜！数字雨', 2000);
+    state.gameOver = isBoardFull(); showCeleb('惊喜！数字雨', 2000);
     runWave(function() {});
   } else {
-    for (var row3 = 0; row3 < ROWS; row3++)
-      for (var col3 = 0; col3 < COLS; col3++)
-        state.grid[row3][col3] = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
-    state.gameOver = isBoardFull();
-    showCelebration('惊喜！全部填满', 2000);
+    for (var row = 0; row < ROWS; row++) for (var col = 0; col < COLS; col++) state.grid[row][col] = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
+    state.gameOver = isBoardFull(); showCeleb('惊喜！全部填满', 2000);
   }
 }
 
-// ─── Power-ups ─────────────────────────────────────────────
-
+// ========================
+// POWER-UPS
+// ========================
 function selectPower(type) {
   if (state.gameOver) return;
-  var countField = type + 'Count';
-  if (state[countField] <= 0) return;
-  if (state.activePower === type) {
-    state.activePower = ''; state.hintText = '点击下方列放入数字'; state.swapCell = null; return;
-  }
+  var cf = type + 'Count'; if (state[cf] <= 0) return;
+  if (state.activePower === type) { state.activePower = ''; state.hintText = '点击下方列放入数字'; state.swapCell = null; return; }
   state.swapCell = null;
-  if (type === 'wand') { state.activePower = 'wand'; state.hintText = '点击要变换的数字'; }
-  else if (type === 'swap') { state.activePower = 'swap'; state.hintText = '点击第一个数字'; }
-  else if (type === 'clear') { state.activePower = 'clear'; state.hintText = '点击要消除的数字'; }
+  if (type === 'wand')        { state.activePower = 'wand';         state.hintText = '点击要变换的数字'; }
+  else if (type === 'swap')   { state.activePower = 'swap';         state.hintText = '点击第一个数字'; }
+  else if (type === 'clear')  { state.activePower = 'clear';        state.hintText = '点击要消除的数字'; }
   else if (type === 'supremeWand') { state.activePower = 'supremeWand'; state.hintText = '点击数字，全部相同的都会变'; }
-  else if (type === 'dragonHand') triggerDragonHand();
-  else if (type === 'immortal') triggerImmortal();
+  else if (type === 'dragonHand')  triggerDragonHand();
+  else if (type === 'immortal')    triggerImmortal();
+}
+
+function powerMergeLoop() {
+  var m = false;
+  for (var mr = 0; mr < ROWS; mr++) {
+    for (var mc = 0; mc < COLS; mc++) {
+      var v = state.grid[mr][mc]; if (v === 0) continue;
+      if (mr + 1 < ROWS && state.grid[mr + 1][mc] === v) { state.grid[mr][mc] = v * 2; state.grid[mr + 1][mc] = 0; state.score += v * 2; m = true; }
+      if (mc + 1 < COLS && state.grid[mr][mc + 1] === v) { state.grid[mr][mc] = v * 2; state.grid[mr][mc + 1] = 0; state.score += v * 2; m = true; }
+    }
+  }
+  if (m) applyGravity();
+  return m;
 }
 
 function handlePowerTap(row, col) {
-  var power = state.activePower;
-  if (power === 'wand') {
-    if (value === 0) return;
+  var p = state.activePower, v = state.grid[row][col];
+  if (p === 'wand') {
+    if (v === 0) return;
     state.grid[row][col] = WAND_VALUES[Math.floor(Math.random() * WAND_VALUES.length)];
     state.wandCount--; if (state.wandCount <= 0) state.activePower = '';
     state.hintText = state.wandCount > 0 ? '点击要变换的数字' : '点击下方列放入数字';
-  } else if (power === 'swap') {
-    if (value === 0) return;
+  } else if (p === 'swap') {
+    if (v === 0) return;
     if (!state.swapCell) { state.swapCell = { row: row, col: col }; state.hintText = '点击要交换的另一个数字'; }
     else {
       var sr = state.swapCell.row, sc = state.swapCell.col;
       if (sr === row && sc === col) { state.swapCell = null; state.hintText = '点击第一个数字'; return; }
-      var tmp = state.grid[sr][sc]; state.grid[sr][sc] = state.grid[row][col]; state.grid[row][col] = tmp;
-      applyGravity();
-      do { mergedLoop(); } while (mergedLoop());
+      var t = state.grid[sr][sc]; state.grid[sr][sc] = state.grid[row][col]; state.grid[row][col] = t;
+      applyGravity(); while (powerMergeLoop()) {};
       state.swapCount--; state.swapCell = null;
       state.activePower = state.swapCount > 0 ? 'swap' : '';
       state.hintText = state.swapCount > 0 ? '点击第一个数字' : '点击下方列放入数字';
     }
-  } else if (power === 'clear') {
-    if (value === 0) return;
-    state.grid[row][col] = 0; applyGravity();
-    do { mergedLoop(); } while (mergedLoop());
+  } else if (p === 'clear') {
+    if (v === 0) return;
+    state.grid[row][col] = 0; applyGravity(); while (powerMergeLoop()) {};
     state.clearCount--;
     state.activePower = state.clearCount > 0 ? 'clear' : '';
     state.hintText = state.clearCount > 0 ? '点击要消除的数字' : '点击下方列放入数字';
-  } else if (power === 'supremeWand') {
-    if (value === 0) return;
-    var opts = [value * 2, value * 4, value * 8, value * 16, value * 32];
-    state.supremePicker = { base: value, options: opts, row: row, col: col };
+  } else if (p === 'supremeWand') {
+    if (v === 0) return;
+    var o = [v * 2, v * 4, v * 8, v * 16, v * 32];
+    state.supremePicker = { base: v, options: o, row: row, col: col };
     state.activePower = ''; state.hintText = '选择要变成的数字';
   }
 }
 
-function mergedLoop() {
-  for (var mr = 0; mr < ROWS; mr++) {
-    for (var mc = 0; mc < COLS; mc++) {
-      var mv = state.grid[mr][mc]; if (mv === 0) continue;
-      if (mr + 1 < ROWS && state.grid[mr + 1][mc] === mv) {
-        state.grid[mr][mc] = mv * 2; state.grid[mr + 1][mc] = 0; state.score += mv * 2; merged = true;
-      }
-      if (mc + 1 < COLS && state.grid[mr][mc + 1] === mv) {
-        state.grid[mr][mc] = mv * 2; state.grid[mr][mc + 1] = 0; state.score += mv * 2; merged = true;
-      }
-    }
-  }
-  if (merged) applyGravity();
-  return merged;
-}
-
 function handleSupremeTap(row, col) {
-  var picker = state.supremePicker;
-  if (value === 0) return;
-  if (picker.row === row && picker.col === col) {
-    state.supremePicker = null;
-    state.activePower = state.supremeWandCount > 0 ? 'supremeWand' : '';
+  var pk = state.supremePicker; if (state.grid[row][col] === 0) return;
+  if (pk.row === row && pk.col === col) {
+    state.supremePicker = null; state.activePower = state.supremeWandCount > 0 ? 'supremeWand' : '';
     state.hintText = '点击数字，全部相同的都会变'; return;
   }
-  state.supremePicker = { base: value, options: opts, row: row, col: col };
+  var v = state.grid[row][col];
+  state.supremePicker = { base: v, options: [v*2,v*4,v*8,v*16,v*32], row: row, col: col };
 }
 
-function onSupremePick(newVal) {
-  var base = picker.base;
-  for (var r = 0; r < ROWS; r++)
-    for (var c = 0; c < COLS; c++)
-      if (state.grid[r][c] === base) state.grid[r][c] = newVal;
-  applyGravity();
-  do { mergedLoop(); } while (mergedLoop());
-  state.supremeWandCount--; state.supremePicker = null;
-  state.hintText = '点击下方列放入数字';
-  showCelebration('至尊魔法棒！', 2000);
+function onSupremePick(nv) {
+  var pk = state.supremePicker; if (!pk) return;
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) if (state.grid[r][c] === pk.base) state.grid[r][c] = nv;
+  applyGravity(); while (powerMergeLoop()) {};
+  state.supremeWandCount--; state.supremePicker = null; state.hintText = '点击下方列放入数字';
+  showCeleb('至尊魔法棒！', 2000);
 }
 
 function onCancelSupreme() {
-  state.supremePicker = null;
-  state.activePower = state.supremeWandCount > 0 ? 'supremeWand' : '';
+  state.supremePicker = null; state.activePower = state.supremeWandCount > 0 ? 'supremeWand' : '';
   state.hintText = '点击数字，全部相同的都会变';
 }
-
-// ─── Dragon Hand ────────────────────────────────────────────
 
 function triggerDragonHand() {
   if (state.dragonHandCount <= 0 || state.gameOver) return;
   state.dragonHandCount--; state.activePower = ''; state.hintText = '点击下方列放入数字';
-  showCelebration('龙王的手！', 3000); state._dragonDrops = 20;
-  doDragonWave();
+  showCeleb('龙王的手！', 3000); state._dragonDrops = 20; doDragonWave();
 }
 
 function doDragonWave() {
   if (state._dragonDrops <= 0 || state.gameOver) return;
-  var count = 2 + Math.floor(Math.random() * 2);
-  if (count > state._dragonDrops) count = state._dragonDrops;
-  state._dragonDrops -= count;
-  state.dropCells = {}; state.mergeCells = {};
-  for (var i = 0; i < count; i++) {
-    var topMin = Infinity;
-    for (var c = 0; c < COLS; c++)
-      for (var r = 0; r < ROWS; r++)
-        if (state.grid[r][c] > 0) { if (state.grid[r][c] < topMin) topMin = state.grid[r][c]; break; }
-    if (topMin !== Infinity && value > topMin) value = topMin;
-    var matchCols = [], nextCols = [];
+  var cnt = 2 + Math.floor(Math.random() * 2);
+  if (cnt > state._dragonDrops) cnt = state._dragonDrops;
+  state._dragonDrops -= cnt; state.dropCells = {}; state.mergeCells = {};
+  for (var i = 0; i < cnt; i++) {
+    var mn = Infinity;
+    for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) if (state.grid[r][c] > 0) { if (state.grid[r][c] < mn) mn = state.grid[r][c]; break; }
+    var v = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)]; if (mn !== Infinity && v > mn) v = mn;
+    var mc = [], nc = [];
     for (var c = 0; c < COLS; c++) {
-      if (state.grid[0][c] !== 0) continue;
-      var hasMatch = false, hasNext = false;
-      for (var r = 0; r < ROWS; r++) {
-        if (state.grid[r][c] === value) hasMatch = true;
-        if (state.grid[r][c] === value * 2) hasNext = true;
-      }
-      if (hasMatch) matchCols.push(c); else if (hasNext) nextCols.push(c);
+      if (state.grid[0][c] !== 0) continue; var hm = false, hn = false;
+      for (var r = 0; r < ROWS; r++) { if (state.grid[r][c] === v) hm = true; if (state.grid[r][c] === v * 2) hn = true; }
+      if (hm) mc.push(c); else if (hn) nc.push(c);
     }
-    var targetCols = matchCols.length > 0 ? matchCols : (nextCols.length > 0 ? nextCols : []);
-    if (targetCols.length === 0) for (var c2 = 0; c2 < COLS; c2++) if (state.grid[0][c2] === 0) targetCols.push(c2);
-    if (targetCols.length === 0) return;
-    for (var rr = ROWS - 1; rr >= 0; rr--) if (state.grid[rr][col] === 0) { targetRow = rr; break; }
-    if (targetRow === -1) continue;
-    state.grid[targetRow][col] = value; state.dropCells[targetRow + ',' + col] = 'start';
+    var tcs = mc.length > 0 ? mc : (nc.length > 0 ? nc : []);
+    if (tcs.length === 0) for (var c = 0; c < COLS; c++) if (state.grid[0][c] === 0) tcs.push(c);
+    if (tcs.length === 0) return;
+    var col = tcs[Math.floor(Math.random() * tcs.length)];
+    var tr = -1; for (var r = ROWS - 1; r >= 0; r--) if (state.grid[r][col] === 0) { tr = r; break; }
+    if (tr === -1) continue;
+    state.grid[tr][col] = v; state.dropCells[tr + ',' + col] = 'start';
   }
   state.gameOver = isBoardFull();
   runWave(function() {
-    var placedKeys = []; for (var k in state.dropCells) placedKeys.push(k);
+    var ks = []; for (var k in state.dropCells) ks.push(k);
     state.mergeCells = {};
-    for (var p = 0; p < placedKeys.length; p++) {
-      var parts = placedKeys[p].split(','); processMerges(parseInt(parts[0]), parseInt(parts[1]));
-    }
+    for (var p = 0; p < ks.length; p++) { var ps = ks[p].split(','); processMerges(parseInt(ps[0]), parseInt(ps[1])); }
     applyGravity(); while (scanAndMerge()) applyGravity(); applyGravity();
-    var hm = false; for (var k in state.mergeCells) { hm = true; break; }
-    if (hm) audio.playMerge();
     doDragonWave();
   }, 3);
 }
 
-// ─── Immortal ───────────────────────────────────────────────
-
 function triggerImmortal() {
   if (state.immortalCount <= 0 || state.gameOver) return;
   state.immortalCount--; state.activePower = ''; state.hintText = '点击下方列放入数字';
-  showCelebration('绝世仙尊！', 3000);
+  showCeleb('绝世仙尊！', 3000);
   state.dropCells = {}; state.mergeCells = {};
-  for (var r = 0; r < ROWS; r++)
-    for (var c = 0; c < COLS; c++) {
-      state.grid[r][c] = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
-      state.dropCells[r + ',' + c] = 'start';
-    }
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) { state.grid[r][c] = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)]; state.dropCells[r + ',' + c] = 'start'; }
   runWave(function() { immortalMerge(); });
 }
 
 function immortalMerge() {
-  applyGravity(); state.mergeCells = {};
+  applyGravity(); state.mergeCells = {}; var m = false;
   for (var r = 0; r < ROWS; r++) {
     for (var c = 0; c < COLS; c++) {
-      if (r + 1 < ROWS && state.grid[r + 1][c] === v) {
-        state.grid[r][c] = v * 2; state.grid[r + 1][c] = 0; state.score += v * 2;
-        state.mergeCells[r + ',' + c] = true; merged = true;
-      }
-      if (c + 1 < COLS && state.grid[r][c + 1] === v) {
-        state.grid[r][c] = v * 2; state.grid[r][c + 1] = 0; state.score += v * 2;
-        state.mergeCells[r + ',' + c] = true; merged = true;
-      }
+      var v = state.grid[r][c]; if (v === 0) continue;
+      if (r + 1 < ROWS && state.grid[r + 1][c] === v) { state.grid[r][c] = v * 2; state.grid[r + 1][c] = 0; state.score += v * 2; state.mergeCells[r + ',' + c] = true; m = true; }
+      if (c + 1 < COLS && state.grid[r][c + 1] === v) { state.grid[r][c] = v * 2; state.grid[r][c + 1] = 0; state.score += v * 2; state.mergeCells[r + ',' + c] = true; m = true; }
     }
   }
-  if (!merged) { state.gameOver = isBoardFull(); return; }
-  audio.playMerge();
-  scheduleAction(200, function() { immortalMerge(); });
+  if (!m) { state.gameOver = isBoardFull(); return; }
+  audio.playMerge(); scheduleAction(200, function() { immortalMerge(); });
 }
 
-// ─── Menu ──────────────────────────────────────────────────
-
-function toggleMenu() { state.showMenu = !state.showMenu; }
-function closeMenu() { state.showMenu = false; }
-function restartGame() {
-  state.showMenu = false; initState(); state.currentNumber = generateNumber();
-}
-
-
-
-var _ctx = null, _sw = 0, _sh = 0, _sc = 1;
-
-function initRenderer(ctx, screenW, screenH) {
-  _ctx = ctx; _sw = screenW; _sh = screenH; _sc = screenW / DESIGN_W;
-}
-
-// ─── Helpers ──────────────────────────────────────────────
-
-function roundRect(ctx, x, y, w, h, r) {
+// ========================
+// RENDERER
+// ========================
+function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
   ctx.arcTo(x + w, y, x + w, y + r, r); ctx.lineTo(x + w, y + h - r);
@@ -642,377 +473,282 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
 }
 
-function fillCellBg(ctx, x, y, w, h, value) {
-  ctx.fillStyle = CELL_COLORS[value] || CELL_COLORS[0];
-  roundRect(ctx, x, y, w, h, 8 * _sc); ctx.fill();
+function drawCellBg(ctx, x, y, w, h, v) {
+  ctx.fillStyle = COLORS[v] || COLORS[0]; rr(ctx, x, y, w, h, 8 * SCALE); ctx.fill();
 }
 
-function drawCellText(ctx, x, y, w, h, value) {
-  if (value <= 0) return;
-  ctx.fillStyle = getTextColor(value);
-  ctx.font = 'bold ' + (getFontSize(value) * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+function drawCellNum(ctx, x, y, w, h, v) {
+  if (v <= 0) return;
+  ctx.fillStyle = v <= 4 ? TEXT_DARK : TEXT_LIGHT;
+  var fs = 28;
+  if (v >= 1024) fs = 20; else if (v >= 512) fs = 22; else if (v >= 128) fs = 24;
+  ctx.font = 'bold ' + (fs * SCALE) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(value), x + w / 2, y + h / 2);
+  ctx.fillText(String(v), x + w / 2, y + h / 2);
 }
-
-// ─── Main ─────────────────────────────────────────────────
 
 function render() {
-  ctx.clearRect(0, 0, _sw, _sh);
-  ctx.fillStyle = BG_COLOR; ctx.fillRect(0, 0, _sw, _sh);
-  drawHeader(); drawControlRow(); drawUpgradeRow(); drawHint();
-  drawBoard(); drawCelebration(); drawGameOver(); drawMenu();
-}
+  ctx.fillStyle = '#faf8ef'; ctx.fillRect(0, 0, W, H);
 
-// ─── Header ───────────────────────────────────────────────
-
-function drawHeader() {
-  ctx.fillStyle = TITLE_COLOR;
-  ctx.font = 'bold ' + (40 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
+  // Header
+  var pad = 30 * SCALE;
+  ctx.fillStyle = TEXT_DARK; ctx.font = 'bold ' + (40 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('数字合成', pad, y + 10 * _sc);
-  var sbW = 130 * _sc, sbH = 70 * _sc, sbX = _sw - sbW - pad;
-  ctx.fillStyle = HEADER_BG; roundRect(ctx, sbX, y, sbW, sbH, 8 * _sc); ctx.fill();
-  ctx.fillStyle = HEADER_TEXT;
-  ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('分数', sbX + sbW / 2, y + 12 * _sc);
-  ctx.font = 'bold ' + (36 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.fillText(String(state.score), sbX + sbW / 2, y + 36 * _sc);
-  var btnX = sbX - 66 * _sc, btnW = 56 * _sc, btnH = 56 * _sc;
-  ctx.fillStyle = HEADER_BG; roundRect(ctx, btnX, y + 7 * _sc, btnW, btnH, 8 * _sc); ctx.fill();
-  ctx.fillStyle = HEADER_TEXT;
-  var barW = 32 * _sc, barH = 4 * _sc, barX = btnX + (btnW - barW) / 2;
-  for (var i = 0; i < 3; i++) {
-    roundRect(ctx, barX, y + 17 * _sc + i * 12 * _sc, barW, barH, 2 * _sc); ctx.fill();
-  }
-}
+  ctx.fillText('数字合成', pad, 20 * SCALE + 10 * SCALE);
 
-// ─── Control ──────────────────────────────────────────────
+  // Score
+  var sbW = 130 * SCALE, sbH = 70 * SCALE, sbX = W - sbW - pad, sbY = 20 * SCALE;
+  ctx.fillStyle = '#bbada0'; rr(ctx, sbX, sbY, sbW, sbH, 8 * SCALE); ctx.fill();
+  ctx.fillStyle = '#f9f6f2'; ctx.textAlign = 'center';
+  ctx.font = (22 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.fillText('分数', sbX + sbW / 2, sbY + 12 * SCALE);
+  ctx.font = 'bold ' + (36 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.fillText(String(state.score), sbX + sbW / 2, sbY + 36 * SCALE);
 
-function drawControlRow() {
-  if (state.supremePicker) { drawSupremePicker(); return; }
-  ctx.fillStyle = TITLE_COLOR; ctx.font = (24 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText('下一个数字', cx, y + 4 * _sc);
-  var cellS = 90 * _sc, cellX = cx - cellS / 2, cellY = y + 30 * _sc;
-  fillCellBg(ctx, cellX, cellY, cellS, cellS, state.currentNumber);
-  drawCellText(ctx, cellX, cellY, cellS, cellS, state.currentNumber);
-  var pw = 64 * _sc, ph = 64 * _sc, px = _sw - 30 * _sc - pw, py = y + 10 * _sc;
+  // Hamburger
+  var btnX = sbX - 66 * SCALE, btnYH = sbY + 7 * SCALE, btnW = 56 * SCALE, btnH = 56 * SCALE;
+  ctx.fillStyle = '#bbada0'; rr(ctx, btnX, btnYH, btnW, btnH, 8 * SCALE); ctx.fill();
+  ctx.fillStyle = '#f9f6f2';
+  for (var i = 0; i < 3; i++) rr(ctx, btnX + 12 * SCALE, btnYH + 17 * SCALE + i * 12 * SCALE, 32 * SCALE, 4 * SCALE, 2 * SCALE), ctx.fill();
+
+  // Next number
+  var cy = 100 * SCALE;
+  ctx.fillStyle = TEXT_DARK; ctx.font = (24 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('下一个数字', W / 2, cy + 4 * SCALE);
+  var cs = 90 * SCALE, cx = W / 2 - cs / 2, ccy = cy + 30 * SCALE;
+  drawCellBg(ctx, cx, ccy, cs, cs, state.currentNumber);
+  drawCellNum(ctx, cx, ccy, cs, cs, state.currentNumber);
+
+  // Basic power buttons
+  var pw = 64 * SCALE, ppx = W - 30 * SCALE - pw, ppy = cy + 10 * SCALE;
   var powers = ['wand', 'swap', 'clear'];
-  for (var i = 0; i < powers.length; i++) {
-    var bx = px - i * (pw + 8 * _sc);
-    drawPowerBtn(bx, py, pw, ph, powers[i], state[powers[i] + 'Count']);
+  for (var i = 0; i < 3; i++) {
+    var bx = ppx - i * (pw + 8 * SCALE), type = powers[i], cnt = state[type + 'Count'];
+    var act = state.activePower === type, emp = cnt <= 0;
+    ctx.globalAlpha = emp ? 0.35 : 1;
+    ctx.fillStyle = act ? '#f5f0eb' : '#ffffff'; rr(ctx, bx, ppy, pw, pw, 8 * SCALE); ctx.fill();
+    ctx.strokeStyle = act ? '#8f7a66' : '#e8e0d8'; ctx.lineWidth = 2 * SCALE; rr(ctx, bx, ppy, pw, pw, 8 * SCALE); ctx.stroke();
+    ctx.fillStyle = TEXT_DARK; ctx.font = (20 * SCALE) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(type === 'wand' ? '变' : (type === 'swap' ? '换' : '消'), bx + pw / 2, ppy + pw * 0.45);
+    ctx.fillStyle = '#bbada0'; ctx.font = (14 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif';
+    ctx.fillText('x' + cnt, bx + pw / 2, ppy + pw * 0.72);
+    ctx.globalAlpha = 1;
   }
-}
 
-function drawPowerBtn(x, y, w, h, type, count) {
-  ctx.globalAlpha = empty ? 0.35 : 1;
-  ctx.fillStyle = active ? POWER_ACTIVE_BG : '#ffffff';
-  roundRect(ctx, x, y, w, h, 8 * _sc); ctx.fill();
-  ctx.strokeStyle = active ? POWER_ACTIVE_BORDER : POWER_BORDER;
-  ctx.lineWidth = 2 * _sc; roundRect(ctx, x, y, w, h, 8 * _sc); ctx.stroke();
-  var icons = { wand: '🪄', swap: '🔄', clear: '💣' };
-  ctx.fillStyle = '#333'; ctx.font = (22 * _sc) + 'px sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(icons[type] || '?', x + w / 2, y + h * 0.45);
-  ctx.fillStyle = '#bbada0'; ctx.font = (14 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.fillText('x' + count, x + w / 2, y + h * 0.72);
-  ctx.globalAlpha = 1;
-}
-
-function drawSupremePicker() {
-  ctx.fillStyle = '#bbada0'; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText(state.hintText, _sw / 2, y + 8 * _sc);
-  var exitS = 50 * _sc, exitX = 20 * _sc, exitY = y + 30 * _sc;
-  ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#dddddd'; ctx.lineWidth = 2 * _sc;
-  ctx.beginPath(); ctx.arc(exitX + exitS / 2, exitY + exitS / 2, exitS / 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#999999'; ctx.font = (26 * _sc) + 'px sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('✕', exitX + exitS / 2, exitY + exitS / 2);
-  for (var i = 0; i < opts.length; i++) {
-    var ox = sx + i * (ow + 10 * _sc);
-    fillCellBg(ctx, ox, exitY, ow, oh, opts[i]); drawCellText(ctx, ox, exitY, ow, oh, opts[i]);
+  // Upgrade power row
+  if (!state.supremePicker) {
+    var uy = 210 * SCALE, uw = 150 * SCALE, uh = 46 * SCALE;
+    var items = [{ t: 'supremeWand', l: '至尊魔法棒' }, { t: 'dragonHand', l: '龙王的手' }, { t: 'immortal', l: '绝世仙尊' }];
+    var total = items.length * uw + 2 * 12 * SCALE, sx = (W - total) / 2;
+    for (var i = 0; i < 3; i++) {
+      var it = items[i], ux = sx + i * (uw + 12 * SCALE);
+      ctx.globalAlpha = state[it.t + 'Count'] <= 0 ? 0.35 : 1;
+      ctx.fillStyle = state.activePower === it.t ? '#f5f0eb' : '#ffffff';
+      rr(ctx, ux, uy, uw, uh, 20 * SCALE); ctx.fill();
+      ctx.strokeStyle = state.activePower === it.t ? '#8f7a66' : '#e8e0d8'; ctx.lineWidth = 2 * SCALE; rr(ctx, ux, uy, uw, uh, 20 * SCALE); ctx.stroke();
+      ctx.fillStyle = TEXT_DARK; ctx.font = (22 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(it.l, ux + uw / 2, uy + uh / 2); ctx.globalAlpha = 1;
+    }
   }
-}
 
-// ─── Upgrade ──────────────────────────────────────────────
-
-function drawUpgradeRow() {
-  if (state.supremePicker) return;
-  var items = [
-    { type: 'supremeWand', label: '至尊魔法棒' },
-    { type: 'dragonHand',  label: '龙王的手' },
-    { type: 'immortal',    label: '绝世仙尊' }
-  ];
-  var bw = 150 * _sc, bh = 46 * _sc, totalW = items.length * bw + 2 * 12 * _sc, sx = (_sw - totalW) / 2;
-  for (var i = 0; i < items.length; i++) {
-    var it = items[i], bx = sx + i * (bw + 12 * _sc);
-    ctx.globalAlpha = empty ? 0.35 : 1;
-    ctx.fillStyle = active ? POWER_ACTIVE_BG : '#ffffff';
-    roundRect(ctx, bx, y, bw, bh, 20 * _sc); ctx.fill();
-    ctx.strokeStyle = active ? POWER_ACTIVE_BORDER : POWER_BORDER; ctx.lineWidth = 2 * _sc;
-    roundRect(ctx, bx, y, bw, bh, 20 * _sc); ctx.stroke();
-    ctx.fillStyle = TITLE_COLOR; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(it.label, bx + bw / 2, y + bh / 2); ctx.globalAlpha = 1;
+  // Supreme picker
+  if (state.supremePicker) {
+    var spy = 100 * SCALE;
+    ctx.fillStyle = '#bbada0'; ctx.font = (22 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(state.hintText, W / 2, spy + 8 * SCALE);
+    var exS = 50 * SCALE, ex = 20 * SCALE, ey = spy + 30 * SCALE;
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2 * SCALE;
+    ctx.beginPath(); ctx.arc(ex + exS/2, ey + exS/2, exS/2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#999'; ctx.font = (26 * SCALE) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('✕', ex + exS/2, ey + exS/2);
+    var opts = state.supremePicker.options, ow = 90 * SCALE, oh = 70 * SCALE, ox0 = ex + exS + 16 * SCALE;
+    for (var i = 0; i < opts.length; i++) {
+      var ox = ox0 + i * (ow + 10 * SCALE);
+      drawCellBg(ctx, ox, ey, ow, oh, opts[i]); drawCellNum(ctx, ox, ey, ow, oh, opts[i]);
+    }
   }
-}
 
-// ─── Hint ─────────────────────────────────────────────────
+  // Hint
+  var hy = 256 * SCALE;
+  ctx.fillStyle = '#bbada0'; ctx.font = (22 * SCALE) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(state.hintText, W / 2, hy + 4 * SCALE);
 
-function drawHint() {
-  ctx.fillStyle = HINT_COLOR; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText(state.hintText, _sw / 2, y + 4 * _sc);
-}
+  // Board
+  var BOARD_TOP = 306;
+  var bt = BOARD_TOP * SCALE - state.scrollY;
+  var cw = CELL_W * SCALE, ch = CELL_H * SCALE, gap = GAP * SCALE, rh = ROW_H * SCALE;
+  var tbw = COLS * cw + (COLS - 1) * gap, bl = (W - tbw) / 2;
+  var vh = H - BOARD_TOP * SCALE;
+  state.maxScrollY = Math.max(0, ROWS * rh - vh);
 
-// ─── Board ────────────────────────────────────────────────
-
-function drawBoard() {
-  var cellW = CELL_W * _sc, cellH = CELL_H * _sc, gap = GAP * _sc, rowH = ROW_H * _sc;
-  var totalBoardW = COLS * cellW + (COLS - 1) * gap, boardLeft = (_sw - totalBoardW) / 2;
-  var totalH = ROWS * rowH, visibleH = _sh - BOARD_TOP * _sc;
-  state.maxScrollY = Math.max(0, totalH - visibleH);
-  ctx.save(); ctx.beginPath(); ctx.rect(0, BOARD_TOP * _sc, _sw, visibleH); ctx.clip();
+  ctx.save(); ctx.beginPath(); ctx.rect(0, BOARD_TOP * SCALE, W, vh); ctx.clip();
   for (var r = 0; r < ROWS; r++) {
     for (var c = 0; c < COLS; c++) {
-      var cx = boardLeft + c * (cellW + gap), cy = boardTop + r * rowH;
-      if (cy + cellH < BOARD_TOP * _sc || cy > _sh) continue;
-      var key = r + ',' + c, phase = state.dropCells[key], offsetY = 0;
-      if (phase === 'start') offsetY = -(r * ROW_H + 150) * _sc;
-      drawCell(cx, cy + offsetY, cellW, cellH, state.grid[r][c], r, c);
+      var dx = bl + c * (cw + gap), dy = bt + r * rh;
+      if (dy + ch < BOARD_TOP * SCALE || dy > H) continue;
+      var key = r + ',' + c, off = 0;
+      if (state.dropCells[key] === 'start') off = -(r * ROW_H + 150) * SCALE;
+      var v = state.grid[r][c];
+      drawCellBg(ctx, dx, dy + off, cw, ch, v);
+      var hl = (state.swapCell && state.swapCell.row === r && state.swapCell.col === c) ||
+               (state.supremePicker && state.supremePicker.row === r && state.supremePicker.col === c);
+      if (hl) { ctx.save(); ctx.strokeStyle = '#f2b179'; ctx.lineWidth = 4 * SCALE; ctx.shadowColor = '#f2b179'; ctx.shadowBlur = 12 * SCALE; rr(ctx, dx, dy + off, cw, ch, 8 * SCALE); ctx.stroke(); ctx.restore(); }
+      drawCellNum(ctx, dx, dy + off, cw, ch, v);
     }
   }
   ctx.restore();
-}
 
-function drawCell(x, y, w, h, value, row, col) {
-  fillCellBg(ctx, x, y, w, h, value);
-  var hl = (state.swapCell && state.swapCell.row === row && state.swapCell.col === col) ||
-           (state.supremePicker && state.supremePicker.row === row && state.supremePicker.col === col);
-  if (hl) {
-    ctx.save(); ctx.strokeStyle = SWAP_GLOW; ctx.lineWidth = 4 * _sc;
-    ctx.shadowColor = SWAP_GLOW; ctx.shadowBlur = 12 * _sc;
-    roundRect(ctx, x, y, w, h, 8 * _sc); ctx.stroke(); ctx.restore();
+  // Celebration
+  if (state.celebration) {
+    var el = Date.now() - state.celebTime, ep = Math.min(1, el / 900);
+    var t = celebTransform(ep);
+    ctx.save(); ctx.globalAlpha = t.a; ctx.translate(W/2, H/2); ctx.scale(t.s, t.s);
+    ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.font = 'bold ' + (56*SCALE) + 'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(state.celebration, 2*SCALE, 2*SCALE);
+    ctx.fillStyle = '#f65e3b'; ctx.fillText(state.celebration, 0, 0);
+    ctx.restore();
   }
-  drawCellText(ctx, x, y, w, h, value);
-}
 
-// ─── Celebration ──────────────────────────────────────────
+  // Game over
+  if (state.gameOver) {
+    ctx.fillStyle = 'rgba(238,228,218,0.73)'; ctx.fillRect(0, 0, W, H);
+    var bw = 380 * SCALE, bh = 280 * SCALE, bbx = (W - bw)/2, bby = (H - bh)/2;
+    ctx.fillStyle = '#fff'; rr(ctx, bbx, bby, bw, bh, 12*SCALE); ctx.fill();
+    ctx.fillStyle = TEXT_DARK; ctx.font = 'bold '+(48*SCALE)+'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('游戏结束', W/2, bby+70*SCALE);
+    ctx.font = (32*SCALE)+'px "Helvetica Neue",Arial,sans-serif'; ctx.fillText('得分: '+state.score, W/2, bby+140*SCALE);
+    var rw = 200*SCALE, rh2 = 56*SCALE, rrx = (W-rw)/2, rry = bby+190*SCALE;
+    ctx.fillStyle = '#8f7a66'; rr(ctx, rrx, rry, rw, rh2, 8*SCALE); ctx.fill();
+    ctx.fillStyle = '#f9f6f2'; ctx.font = (28*SCALE)+'px "Helvetica Neue",Arial,sans-serif'; ctx.fillText('重新开始', W/2, rry+rh2/2);
+  }
 
-function drawCelebration() {
-  if (!state.celebration) return;
-  var elapsed = Date.now() - state.celebTime;
-  ctx.save(); ctx.globalAlpha = t.alpha; ctx.translate(_sw / 2, _sh / 2); ctx.scale(t.scale, t.scale);
-  ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.font = 'bold ' + (56 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(state.celebration, 2 * _sc, 2 * _sc);
-  ctx.fillStyle = CELEB_COLOR;
-  ctx.fillText(state.celebration, 0, 0);
-  ctx.restore();
-}
-
-// ─── Game Over ────────────────────────────────────────────
-
-function drawGameOver() {
-  if (!state.gameOver) return;
-  ctx.fillStyle = OVERLAY_BG; ctx.fillRect(0, 0, _sw, _sh);
-  ctx.fillStyle = '#ffffff'; roundRect(ctx, bx, by, bw, bh, 12 * _sc); ctx.fill();
-  ctx.fillStyle = TITLE_COLOR; ctx.font = 'bold ' + (48 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('游戏结束', _sw / 2, by + 70 * _sc);
-  ctx.font = (32 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.fillText('得分: ' + state.score, _sw / 2, by + 140 * _sc);
-  var btnW = 200 * _sc, btnH = 56 * _sc, btnX = (_sw - btnW) / 2, btnY = by + 190 * _sc;
-  ctx.fillStyle = NEWGAME_BG; roundRect(ctx, btnX, btnY, btnW, btnH, 8 * _sc); ctx.fill();
-  ctx.fillStyle = '#f9f6f2'; ctx.font = (28 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-  ctx.fillText('重新开始', _sw / 2, btnY + btnH / 2);
-}
-
-// ─── Menu ─────────────────────────────────────────────────
-
-function drawMenu() {
-  if (!state.showMenu) return;
-  ctx.fillStyle = 'rgba(0,0,0,0.01)'; ctx.fillRect(0, 0, _sw, _sh);
-  var mw = 280 * _sc, mx = _sw - 30 * _sc - mw, my = 100 * _sc, itemH = 56 * _sc;
-  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 24 * _sc; ctx.shadowOffsetY = 6 * _sc;
-  ctx.fillStyle = MENU_BG; roundRect(ctx, mx, my, mw, itemH * 4, 10 * _sc); ctx.fill(); ctx.restore();
-  for (var i = 0; i < items.length; i++) {
-    var iy = my + i * itemH, item = items[i];
-    ctx.fillStyle = TITLE_COLOR; ctx.font = (28 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(item.label, mx + 30 * _sc, iy + itemH / 2);
-    if (item.type === 'sfx' || item.type === 'bgm') {
-      var on = item.type === 'sfx' ? audio.sfxEnabled : audio.bgmEnabled;
-      drawToggle(mx + mw - 90 * _sc, iy + (itemH - 36 * _sc) / 2, on);
-    }
-    if (i === 2) {
-      ctx.strokeStyle = '#e8e0d8'; ctx.lineWidth = 1 * _sc;
-      ctx.beginPath(); ctx.moveTo(mx + 30 * _sc, iy); ctx.lineTo(mx + mw - 30 * _sc, iy); ctx.stroke();
+  // Menu
+  if (state.showMenu) {
+    ctx.fillStyle = 'rgba(0,0,0,0.01)'; ctx.fillRect(0, 0, W, H);
+    var mw = 280 * SCALE, mx = W - 30*SCALE - mw, my = 100 * SCALE, mih = 56 * SCALE;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 24*SCALE; ctx.shadowOffsetY = 6*SCALE;
+    ctx.fillStyle = '#fff'; rr(ctx, mx, my, mw, mih*3, 10*SCALE); ctx.fill(); ctx.restore();
+    var mis = [{ l: '音效', t: 'sfx' }, { l: '背景音乐', t: 'bgm' }, { l: '重新开始', t: 'restart' }];
+    for (var i = 0; i < 3; i++) {
+      var miy = my + i * mih;
+      ctx.fillStyle = TEXT_DARK; ctx.font = (28*SCALE)+'px "Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(mis[i].l, mx+30*SCALE, miy+mih/2);
+      if (mis[i].t !== 'restart') {
+        var on = mis[i].t === 'sfx' ? audio.sfxEnabled : audio.bgmEnabled;
+        var tx = mx+mw-90*SCALE, ty = miy+(mih-36*SCALE)/2, tw = 64*SCALE, th = 36*SCALE, kr = 14*SCALE;
+        ctx.fillStyle = on ? '#8f7a66' : '#cdc1b4'; rr(ctx, tx, ty, tw, th, 18*SCALE); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc((on ? tx+tw-4*SCALE-kr*2 : tx+4*SCALE)+kr, ty+(th-kr*2)/2+kr, kr, 0, Math.PI*2); ctx.fill();
+      } else {
+        ctx.strokeStyle = '#e8e0d8'; ctx.lineWidth = 1*SCALE; ctx.beginPath(); ctx.moveTo(mx+30*SCALE, miy); ctx.lineTo(mx+mw-30*SCALE, miy); ctx.stroke();
+      }
     }
   }
 }
 
-function drawToggle(x, y, on) {
-  ctx.fillStyle = on ? TOGGLE_ON_BG : TOGGLE_OFF_BG; roundRect(ctx, x, y, tw, th, 18 * _sc); ctx.fill();
-  var kx = on ? x + tw - 4 * _sc - kr * 2 : x + 4 * _sc;
-  ctx.fillStyle = '#ffffff'; ctx.beginPath();
-  ctx.arc(kx + kr, y + (th - kr * 2) / 2 + kr, kr, 0, Math.PI * 2); ctx.fill();
-}
+// ========================
+// INPUT
+// ========================
+var _tsX = 0, _tsY = 0, _tsT = 0, _isS = false, _sbY = 0, _ld = 0, _lt = 0;
 
-
-var _sw = 0, _sc = 1;
-var _touchStartX = 0, _touchStartY = 0, _touchStartTime = 0;
-var _isScrolling = false, _scrollBaseY = 0, _lastDy = 0, _lastTime = 0;
-
-function initInput(screenW) {
-  _sw = screenW; _sc = screenW / DESIGN_W;
-
-  wx.onTouchStart(function(e) {
-    _touchStartX = t.clientX; _touchStartY = t.clientY; _touchStartTime = Date.now();
-    _isScrolling = false; _scrollBaseY = state.scrollY; _lastDy = 0; _lastTime = _touchStartTime;
-  });
-
-  wx.onTouchMove(function(e) {
-    if (!_isScrolling && Math.abs(dy) > 8 && Math.abs(_touchStartX - t.clientX) < Math.abs(dy) * 2) _isScrolling = true;
-    if (_isScrolling) {
-      state.scrollY = _scrollBaseY + dy;
-      if (state.scrollY < 0) state.scrollY = 0;
-      if (state.scrollY > state.maxScrollY) state.scrollY = state.maxScrollY;
-      _lastDy = t.clientY - _touchStartY; _lastTime = Date.now();
-    }
-  });
-
-  wx.onTouchEnd(function(e) {
-    if (_isScrolling) {
-      var dt = Date.now() - _lastTime;
-      if (dt > 0 && dt < 100) state.scrollVelocity = -_lastDy / dt * 16;
-      return;
-    }
-    if (Date.now() - _touchStartTime > 300) return;
-    hitTest(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-  });
-}
+wx.onTouchStart(function(e) {
+  var t = e.touches[0]; _tsX = t.clientX; _tsY = t.clientY; _tsT = Date.now();
+  _isS = false; _sbY = state.scrollY; _ld = 0; _lt = _tsT;
+});
+wx.onTouchMove(function(e) {
+  var t = e.touches[0], dy = _tsY - t.clientY;
+  if (!_isS && Math.abs(dy) > 8 && Math.abs(_tsX - t.clientX) < Math.abs(dy) * 2) _isS = true;
+  if (_isS) { state.scrollY = _sbY + dy; if (state.scrollY < 0) state.scrollY = 0; if (state.scrollY > state.maxScrollY) state.scrollY = state.maxScrollY; _ld = t.clientY - _tsY; _lt = Date.now(); }
+});
+wx.onTouchEnd(function(e) {
+  if (_isS) { var dt = Date.now() - _lt; if (dt > 0 && dt < 100) state.scrollVelocity = -_ld / dt * 16; return; }
+  if (Date.now() - _tsT > 300) return;
+  hitTest(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+});
 
 function hitTest(x, y) {
   if (state.gameOver) { restartGame(); return; }
-  if (state.showMenu) {
-    var mh = hitMenu(x, y);
-    if (mh) { handleMenuHit(mh); return; }
-    state.showMenu = false; return;
-  }
-  if (state.supremePicker) {
-    var pv = hitSupremePicker(x, y);
-    if (pv === 'exit') { onCancelSupreme(); return; }
-    if (pv > 0) { onSupremePick(pv); return; }
-  }
-  if (hitMenuBtn(x, y)) { toggleMenu(); return; }
-  var up = hitUpgradeBtn(x, y); if (up) { selectPower(up); return; }
-  var cell = hitCell(x, y);
-  if (cell) { handleCellTap(cell.row, cell.col); return; }
+  if (state.showMenu) { var mh = hitMenu(x,y); if (mh) { if (mh === 'sfx') audio.toggleSfx(); else if (mh === 'bgm') audio.toggleBgm(); else if (mh === 'rst') restartGame(); return; } state.showMenu = false; return; }
+  if (state.supremePicker) { var pv = hitPicker(x,y); if (pv === 'exit') { onCancelSupreme(); return; } if (pv > 0) { onSupremePick(pv); return; } }
+  if (hitMenuBtn(x,y)) { state.showMenu = !state.showMenu; return; }
+  var pw = hitPower(x,y); if (pw) { selectPower(pw); return; }
+  var up = hitUpgrade(x,y); if (up) { selectPower(up); return; }
+  var cell = hitCell(x,y); if (cell) { onCellTap(cell.r, cell.c); }
 }
 
-function hitMenuBtn(x, y) {
-  return x >= bx && x <= bx + 56 * _sc && y >= by && y <= by + 56 * _sc;
+function hitMenuBtn(x,y) { var bx = W - 66*SCALE - 56*SCALE, by = 20*SCALE + 7*SCALE, bw = 56*SCALE, bh = 56*SCALE; return x >= bx && x <= bx+bw && y >= by && y <= by+bh; }
+
+function hitPower(x,y) {
+  var py = 100*SCALE + 10*SCALE, pw = 64*SCALE, px = W - 30*SCALE - pw, types = ['wand','swap','clear'];
+  for (var i = 0; i < 3; i++) { var bx = px - i*(pw+8*SCALE); if (x >= bx && x <= bx+pw && y >= py && y <= py+pw) return types[i]; }
+  return null;
 }
 
-function hitPowerBtn(x, y) {
-  var py = HEADER_H * _sc + 10 * _sc, pw = 64 * _sc, px = _sw - 30 * _sc - pw;
-  for (var i = 0; i < powers.length; i++) {
-    if (x >= bx && x <= bx + pw && y >= py && y <= py + 64 * _sc) return powers[i];
+function hitUpgrade(x,y) {
+  var uy = 210*SCALE, uw = 150*SCALE, uh = 46*SCALE, its = ['supremeWand','dragonHand','immortal'];
+  var total = its.length*uw + 2*12*SCALE, sx = (W-total)/2;
+  for (var i = 0; i < 3; i++) { var bx = sx + i*(uw+12*SCALE); if (x >= bx && x <= bx+uw && y >= uy && y <= uy+uh) return its[i]; }
+  return null;
+}
+
+function hitCell(x,y) {
+  var cw = CELL_W*SCALE, ch = CELL_H*SCALE, gap = GAP*SCALE, rh = ROW_H*SCALE;
+  var tbw = COLS*cw + (COLS-1)*gap, bl = (W-tbw)/2, bt = 306*SCALE - state.scrollY;
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+    var cx = bl + c*(cw+gap), cy = bt + r*rh;
+    if (x >= cx && x <= cx+cw && y >= cy && y <= cy+ch) return { r: r, c: c };
   }
   return null;
 }
 
-function hitUpgradeBtn(x, y) {
-  var by = (HEADER_H + CONTROL_H) * _sc, bw = 150 * _sc, bh = 46 * _sc;
-  var totalW = items.length * bw + 2 * 12 * _sc, sx = (_sw - totalW) / 2;
-  for (var i = 0; i < items.length; i++) {
-    if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return items[i];
-  }
-  return null;
-}
-
-function hitCell(x, y) {
-  var bl = (_sw - totalW) / 2, bt = BOARD_TOP * _sc - state.scrollY;
-  for (var r = 0; r < ROWS; r++) {
-    for (var c = 0; c < COLS; c++) {
-      if (x >= cx && x <= cx + cellW && y >= cy && y <= cy + cellH) return { row: r, col: c };
-    }
-  }
-  return null;
-}
-
-function hitSupremePicker(x, y) {
-  if ((x - ecx) * (x - ecx) + (y - ecy) * (y - ecy) <= (exitS / 2) * (exitS / 2)) return 'exit';
-  var ow = 90 * _sc, oh = 70 * _sc, sx = 20 * _sc + exitS + 16 * _sc;
-  for (var i = 0; i < opts.length; i++) {
-    if (x >= ox && x <= ox + ow && y >= py && y <= py + oh) return opts[i];
-  }
+function hitPicker(x,y) {
+  var py = 100*SCALE + 30*SCALE, exS = 50*SCALE, ecx = 20*SCALE + exS/2, ecy = py + exS/2;
+  if ((x-ecx)*(x-ecx) + (y-ecy)*(y-ecy) <= (exS/2)*(exS/2)) return 'exit';
+  var ow = 90*SCALE, oh = 70*SCALE, ox0 = 20*SCALE + exS + 16*SCALE, opts = state.supremePicker.options;
+  for (var i = 0; i < opts.length; i++) { var ox = ox0 + i*(ow+10*SCALE); if (x >= ox && x <= ox+ow && y >= py && y <= py+oh) return opts[i]; }
   return 0;
 }
 
-function hitMenu(x, y) {
-  if (x >= mx && x <= mx + mw && y >= my && y <= my + itemH * 4) {
-    var idx = Math.floor((y - my) / itemH);
-    if (idx === 0) return 'sfx'; if (idx === 1) return 'bgm'; if (idx === 2) return 'restart';
-  }
+function hitMenu(x,y) {
+  var mw = 280*SCALE, mx = W-30*SCALE-mw, my = 100*SCALE, mih = 56*SCALE;
+  if (x >= mx && x <= mx+mw && y >= my && y <= my+mih*3) { var idx = Math.floor((y-my)/mih); return idx === 0 ? 'sfx' : (idx === 1 ? 'bgm' : 'rst'); }
   return null;
 }
 
-function handleMenuHit(type) {
-  if (type === 'sfx') audio.toggleSfx();
-  else if (type === 'bgm') audio.toggleBgm();
-  else if (type === 'restart') restartGame();
-}
-
-function handleCellTap(row, col) {
+function onCellTap(row, col) {
   if (state.gameOver) return;
-  if (state.supremePicker) { handleSupremeTap(row, col); return; }
-  if (state.activePower) { handlePowerTap(row, col); return; }
-  if (!placeNumber(col, state.currentNumber)) {
-    if (isBoardFull()) state.gameOver = true;
-    return;
-  }
-  state.currentNumber = generateNumber();
-  state.gameOver = isBoardFull();
+  if (state.supremePicker) { handleSupremeTap(row,col); return; }
+  if (state.activePower) { handlePowerTap(row,col); return; }
+  if (!placeNumber(col, state.currentNumber)) { if (isBoardFull()) state.gameOver = true; return; }
+  var mc = countMergeCells(); state.currentNumber = generateNumber(); state.gameOver = isBoardFull();
   runWave(function() { chainBonuses(mc); });
 }
 
-
-function init() {
-  var sysInfo = wx.getSystemInfoSync();
-  var dpr = sysInfo.pixelRatio || 2;
-  var screenW = sysInfo.windowWidth;
-  var screenH = sysInfo.windowHeight;
-
-  var canvas = wx.createCanvas();
-  canvas.width = screenW * dpr;
-  canvas.height = screenH * dpr;
-
-  ctx.scale(dpr, dpr);
-
-  initState();
-  audio.init();
-  initRenderer(ctx, screenW, screenH);
-  initInput(screenW);
-  state.currentNumber = generateNumber();
-
-  wx.onShow(function() { if (audio.bgmEnabled) audio.playBgm(); });
-  wx.onHide(function() { audio.pauseBgm(); });
-
-  requestAnimationFrame(gameLoop);
+function restartGame() {
+  state.showMenu = false; state.gameOver = false; state.score = 0;
+  state.activePower = ''; state.hintText = '点击下方列放入数字'; state.supremePicker = null; state.swapCell = null;
+  state.wandCount = 3; state.swapCount = 3; state.clearCount = 3; state.supremeWandCount = 1; state.dragonHandCount = 1; state.immortalCount = 1;
+  state.dropCells = {}; state.mergeCells = {}; state.scrollY = 0;
+  initState(); state.currentNumber = generateNumber();
+  console.log('[GAME] Restarted');
 }
 
-function gameLoop(timestamp) {
-  var now = timestamp || Date.now();
-  updateAnim(now);
-  processActions(now);
-  updateScrollInertia();
+// ========================
+// GAME LOOP
+// ========================
+function gameLoop(ts) {
+  var now = ts || Date.now();
+  updateTweens(now); runActions(now); updateScroll();
   render();
   requestAnimationFrame(gameLoop);
 }
 
+// ========================
+// INIT
+// ========================
+function init() {
+  console.log('[GAME] init()');
+  initState(); state.currentNumber = generateNumber();
+  console.log('[GAME] Starting game loop');
+  requestAnimationFrame(gameLoop);
+}
 
 init();
+console.log('[GAME] Loaded');
