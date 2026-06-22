@@ -99,6 +99,14 @@ function initState() {
 }
 
 
+var tweens = [];
+var pendingActions = [];
+var _nextAnimId = 0;
+
+function scheduleAction(delayMs, callback) {
+  pendingActions.push({ time: Date.now() + delayMs, callback: callback });
+}
+
 function addTween(type, data, durationMs) {
   tweens.push({ id: _nextAnimId++, type: type, startTime: Date.now(), duration: durationMs, progress: 0, data: data });
 }
@@ -893,6 +901,9 @@ function drawToggle(x, y, on) {
 }
 
 
+var _touchStartX = 0, _touchStartY = 0, _touchStartTime = 0;
+var _isScrolling = false, _scrollBaseY = 0, _lastDy = 0, _lastTime = 0;
+
 function hitTest(x, y) {
   if (state.gameOver) { restartGame(); return; }
   if (state.showMenu) {
@@ -1031,3 +1042,34 @@ function init() {
 
 // === Init ===
 init();
+
+function initInput(screenW) {
+  _sw = screenW; _sc = screenW / DESIGN_W;
+
+  wx.onTouchStart(function(e) {
+    var t = e.touches[0];
+    _touchStartX = t.clientX; _touchStartY = t.clientY; _touchStartTime = Date.now();
+    _isScrolling = false; _scrollBaseY = state.scrollY; _lastDy = 0; _lastTime = _touchStartTime;
+  });
+
+  wx.onTouchMove(function(e) {
+    var t = e.touches[0], dy = _touchStartY - t.clientY;
+    if (!_isScrolling && Math.abs(dy) > 8 && Math.abs(_touchStartX - t.clientX) < Math.abs(dy) * 2) _isScrolling = true;
+    if (_isScrolling) {
+      state.scrollY = _scrollBaseY + dy;
+      if (state.scrollY < 0) state.scrollY = 0;
+      if (state.scrollY > state.maxScrollY) state.scrollY = state.maxScrollY;
+      _lastDy = t.clientY - _touchStartY; _lastTime = Date.now();
+    }
+  });
+
+  wx.onTouchEnd(function(e) {
+    if (_isScrolling) {
+      var dt = Date.now() - _lastTime;
+      if (dt > 0 && dt < 100) state.scrollVelocity = -_lastDy / dt * 16;
+      return;
+    }
+    if (Date.now() - _touchStartTime > 300) return;
+    hitTest(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+  });
+}
