@@ -55,6 +55,7 @@ var DROP_PATH  = '/assets/audio/drop.mp3';
 var MERGE_PATH = '/assets/audio/merge.mp3';
 
 
+
 var state = {};
 
 function initState() {
@@ -149,13 +150,12 @@ function getCelebTransform(progress) {
     var p = progress / 0.25;
     return { scale: 0.3 + 0.9 * easeOutQuad(p), alpha: easeOutQuad(p) };
   } else if (progress < 0.5) {
-    var p = (progress - 0.25) / 0.25;
     return { scale: 1.2 - 0.2 * p, alpha: 1 };
   } else {
-    var p = (progress - 0.5) / 0.5;
     return { scale: 1.0 - 0.2 * easeOutQuad(p), alpha: 1 - easeOutQuad(p) };
   }
 }
+
 
 
 var audio = {
@@ -215,15 +215,10 @@ var audio = {
   }
 };
 
+var initState = initState;
 
-
-
-
-
-
-
-
-
+var scheduleAction = scheduleAction;
+var addTween = addTween;
 
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -348,8 +343,6 @@ function spawnBonuses(count) {
     for (var c = 0; c < COLS; c++) if (state.grid[0][c] === 0) availCols.push(c);
     if (availCols.length === 0) break;
     var col = availCols[Math.floor(Math.random() * availCols.length)];
-    var value = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
-    var targetRow = -1;
     for (var r = ROWS - 1; r >= 0; r--) { if (state.grid[r][col] === 0) { targetRow = r; break; } }
     if (targetRow === -1) continue;
     state.grid[targetRow][col] = value;
@@ -360,7 +353,6 @@ function spawnBonuses(count) {
   for (var p = 0; p < placed.length; p++) processMerges(placed[p].row, placed[p].col);
   applyGravity();
   while (scanAndMerge()) applyGravity();
-  var mc = 0; for (var k in state.mergeCells) mc++;
   return mc;
 }
 
@@ -408,7 +400,6 @@ function triggerSurprise(mergeCount) {
     var minVal = Infinity, secondMin = Infinity;
     for (var row = 0; row < ROWS; row++) {
       for (var col = 0; col < COLS; col++) {
-        var v = state.grid[row][col];
         if (v > 0 && v < minVal) { secondMin = minVal; minVal = v; }
         else if (v > minVal && v < secondMin) secondMin = v;
       }
@@ -463,7 +454,6 @@ function selectPower(type) {
 
 function handlePowerTap(row, col) {
   var power = state.activePower;
-  var value = state.grid[row][col];
   if (power === 'wand') {
     if (value === 0) return;
     state.grid[row][col] = WAND_VALUES[Math.floor(Math.random() * WAND_VALUES.length)];
@@ -498,7 +488,6 @@ function handlePowerTap(row, col) {
 }
 
 function mergedLoop() {
-  var merged = false;
   for (var mr = 0; mr < ROWS; mr++) {
     for (var mc = 0; mc < COLS; mc++) {
       var mv = state.grid[mr][mc]; if (mv === 0) continue;
@@ -516,19 +505,16 @@ function mergedLoop() {
 
 function handleSupremeTap(row, col) {
   var picker = state.supremePicker;
-  var value = state.grid[row][col];
   if (value === 0) return;
   if (picker.row === row && picker.col === col) {
     state.supremePicker = null;
     state.activePower = state.supremeWandCount > 0 ? 'supremeWand' : '';
     state.hintText = '点击数字，全部相同的都会变'; return;
   }
-  var opts = [value * 2, value * 4, value * 8, value * 16, value * 32];
   state.supremePicker = { base: value, options: opts, row: row, col: col };
 }
 
 function onSupremePick(newVal) {
-  var picker = state.supremePicker; if (!picker) return;
   var base = picker.base;
   for (var r = 0; r < ROWS; r++)
     for (var c = 0; c < COLS; c++)
@@ -566,7 +552,6 @@ function doDragonWave() {
     for (var c = 0; c < COLS; c++)
       for (var r = 0; r < ROWS; r++)
         if (state.grid[r][c] > 0) { if (state.grid[r][c] < topMin) topMin = state.grid[r][c]; break; }
-    var value = SPAWN_VALUES[Math.floor(Math.random() * SPAWN_VALUES.length)];
     if (topMin !== Infinity && value > topMin) value = topMin;
     var matchCols = [], nextCols = [];
     for (var c = 0; c < COLS; c++) {
@@ -581,8 +566,6 @@ function doDragonWave() {
     var targetCols = matchCols.length > 0 ? matchCols : (nextCols.length > 0 ? nextCols : []);
     if (targetCols.length === 0) for (var c2 = 0; c2 < COLS; c2++) if (state.grid[0][c2] === 0) targetCols.push(c2);
     if (targetCols.length === 0) return;
-    var col = targetCols[Math.floor(Math.random() * targetCols.length)];
-    var targetRow = -1;
     for (var rr = ROWS - 1; rr >= 0; rr--) if (state.grid[rr][col] === 0) { targetRow = rr; break; }
     if (targetRow === -1) continue;
     state.grid[targetRow][col] = value; state.dropCells[targetRow + ',' + col] = 'start';
@@ -618,10 +601,8 @@ function triggerImmortal() {
 
 function immortalMerge() {
   applyGravity(); state.mergeCells = {};
-  var merged = false;
   for (var r = 0; r < ROWS; r++) {
     for (var c = 0; c < COLS; c++) {
-      var v = state.grid[r][c]; if (v === 0) continue;
       if (r + 1 < ROWS && state.grid[r + 1][c] === v) {
         state.grid[r][c] = v * 2; state.grid[r + 1][c] = 0; state.score += v * 2;
         state.mergeCells[r + ',' + c] = true; merged = true;
@@ -645,6 +626,8 @@ function restartGame() {
   state.showMenu = false; initState(); state.currentNumber = generateNumber();
 }
 
+
+var getCelebTransform = getCelebTransform;
 
 var _ctx = null, _sw = 0, _sh = 0, _sc = 1;
 
@@ -679,7 +662,6 @@ function drawCellText(ctx, x, y, w, h, value) {
 // ─── Main ─────────────────────────────────────────────────
 
 function render() {
-  var ctx = _ctx;
   ctx.clearRect(0, 0, _sw, _sh);
   ctx.fillStyle = BG_COLOR; ctx.fillRect(0, 0, _sw, _sh);
   drawHeader(); drawControlRow(); drawUpgradeRow(); drawHint();
@@ -689,7 +671,6 @@ function render() {
 // ─── Header ───────────────────────────────────────────────
 
 function drawHeader() {
-  var ctx = _ctx, y = HEADER_PAD_TOP * _sc, pad = 30 * _sc;
   ctx.fillStyle = TITLE_COLOR;
   ctx.font = 'bold ' + (40 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
@@ -714,7 +695,6 @@ function drawHeader() {
 
 function drawControlRow() {
   if (state.supremePicker) { drawSupremePicker(); return; }
-  var ctx = _ctx, y = HEADER_H * _sc, cx = _sw / 2;
   ctx.fillStyle = TITLE_COLOR; ctx.font = (24 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText('下一个数字', cx, y + 4 * _sc);
@@ -730,7 +710,6 @@ function drawControlRow() {
 }
 
 function drawPowerBtn(x, y, w, h, type, count) {
-  var ctx = _ctx, active = state.activePower === type, empty = count <= 0;
   ctx.globalAlpha = empty ? 0.35 : 1;
   ctx.fillStyle = active ? POWER_ACTIVE_BG : '#ffffff';
   roundRect(ctx, x, y, w, h, 8 * _sc); ctx.fill();
@@ -746,7 +725,6 @@ function drawPowerBtn(x, y, w, h, type, count) {
 }
 
 function drawSupremePicker() {
-  var ctx = _ctx, y = HEADER_H * _sc;
   ctx.fillStyle = '#bbada0'; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText(state.hintText, _sw / 2, y + 8 * _sc);
@@ -756,7 +734,6 @@ function drawSupremePicker() {
   ctx.fillStyle = '#999999'; ctx.font = (26 * _sc) + 'px sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('✕', exitX + exitS / 2, exitY + exitS / 2);
-  var opts = state.supremePicker.options, ow = 90 * _sc, oh = 70 * _sc, sx = exitX + exitS + 16 * _sc;
   for (var i = 0; i < opts.length; i++) {
     var ox = sx + i * (ow + 10 * _sc);
     fillCellBg(ctx, ox, exitY, ow, oh, opts[i]); drawCellText(ctx, ox, exitY, ow, oh, opts[i]);
@@ -767,7 +744,6 @@ function drawSupremePicker() {
 
 function drawUpgradeRow() {
   if (state.supremePicker) return;
-  var ctx = _ctx, y = (HEADER_H + CONTROL_H) * _sc;
   var items = [
     { type: 'supremeWand', label: '至尊魔法棒' },
     { type: 'dragonHand',  label: '龙王的手' },
@@ -776,7 +752,6 @@ function drawUpgradeRow() {
   var bw = 150 * _sc, bh = 46 * _sc, totalW = items.length * bw + 2 * 12 * _sc, sx = (_sw - totalW) / 2;
   for (var i = 0; i < items.length; i++) {
     var it = items[i], bx = sx + i * (bw + 12 * _sc);
-    var active = state.activePower === it.type, empty = state[it.type + 'Count'] <= 0;
     ctx.globalAlpha = empty ? 0.35 : 1;
     ctx.fillStyle = active ? POWER_ACTIVE_BG : '#ffffff';
     roundRect(ctx, bx, y, bw, bh, 20 * _sc); ctx.fill();
@@ -791,7 +766,6 @@ function drawUpgradeRow() {
 // ─── Hint ─────────────────────────────────────────────────
 
 function drawHint() {
-  var ctx = _ctx, y = (HEADER_H + CONTROL_H + UPGRADE_H) * _sc;
   ctx.fillStyle = HINT_COLOR; ctx.font = (22 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText(state.hintText, _sw / 2, y + 4 * _sc);
@@ -800,7 +774,6 @@ function drawHint() {
 // ─── Board ────────────────────────────────────────────────
 
 function drawBoard() {
-  var ctx = _ctx, boardTop = BOARD_TOP * _sc - state.scrollY;
   var cellW = CELL_W * _sc, cellH = CELL_H * _sc, gap = GAP * _sc, rowH = ROW_H * _sc;
   var totalBoardW = COLS * cellW + (COLS - 1) * gap, boardLeft = (_sw - totalBoardW) / 2;
   var totalH = ROWS * rowH, visibleH = _sh - BOARD_TOP * _sc;
@@ -819,7 +792,6 @@ function drawBoard() {
 }
 
 function drawCell(x, y, w, h, value, row, col) {
-  var ctx = _ctx;
   fillCellBg(ctx, x, y, w, h, value);
   var hl = (state.swapCell && state.swapCell.row === row && state.swapCell.col === col) ||
            (state.supremePicker && state.supremePicker.row === row && state.supremePicker.col === col);
@@ -836,8 +808,6 @@ function drawCell(x, y, w, h, value, row, col) {
 function drawCelebration() {
   if (!state.celebration) return;
   var elapsed = Date.now() - state.celebTime;
-  var t = getCelebTransform(Math.min(1, elapsed / 900));
-  var ctx = _ctx;
   ctx.save(); ctx.globalAlpha = t.alpha; ctx.translate(_sw / 2, _sh / 2); ctx.scale(t.scale, t.scale);
   ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.font = 'bold ' + (56 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -851,9 +821,7 @@ function drawCelebration() {
 
 function drawGameOver() {
   if (!state.gameOver) return;
-  var ctx = _ctx;
   ctx.fillStyle = OVERLAY_BG; ctx.fillRect(0, 0, _sw, _sh);
-  var bw = 380 * _sc, bh = 280 * _sc, bx = (_sw - bw) / 2, by = (_sh - bh) / 2;
   ctx.fillStyle = '#ffffff'; roundRect(ctx, bx, by, bw, bh, 12 * _sc); ctx.fill();
   ctx.fillStyle = TITLE_COLOR; ctx.font = 'bold ' + (48 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -870,12 +838,10 @@ function drawGameOver() {
 
 function drawMenu() {
   if (!state.showMenu) return;
-  var ctx = _ctx;
   ctx.fillStyle = 'rgba(0,0,0,0.01)'; ctx.fillRect(0, 0, _sw, _sh);
   var mw = 280 * _sc, mx = _sw - 30 * _sc - mw, my = 100 * _sc, itemH = 56 * _sc;
   ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 24 * _sc; ctx.shadowOffsetY = 6 * _sc;
   ctx.fillStyle = MENU_BG; roundRect(ctx, mx, my, mw, itemH * 4, 10 * _sc); ctx.fill(); ctx.restore();
-  var items = [{ label: '音效', type: 'sfx' }, { label: '背景音乐', type: 'bgm' }, { label: '重新开始', type: 'restart' }];
   for (var i = 0; i < items.length; i++) {
     var iy = my + i * itemH, item = items[i];
     ctx.fillStyle = TITLE_COLOR; ctx.font = (28 * _sc) + 'px "Helvetica Neue",Arial,sans-serif';
@@ -893,7 +859,6 @@ function drawMenu() {
 }
 
 function drawToggle(x, y, on) {
-  var ctx = _ctx, tw = 64 * _sc, th = 36 * _sc, kr = 14 * _sc;
   ctx.fillStyle = on ? TOGGLE_ON_BG : TOGGLE_OFF_BG; roundRect(ctx, x, y, tw, th, 18 * _sc); ctx.fill();
   var kx = on ? x + tw - 4 * _sc - kr * 2 : x + 4 * _sc;
   ctx.fillStyle = '#ffffff'; ctx.beginPath();
@@ -901,8 +866,38 @@ function drawToggle(x, y, on) {
 }
 
 
+var _sw = 0, _sc = 1;
 var _touchStartX = 0, _touchStartY = 0, _touchStartTime = 0;
 var _isScrolling = false, _scrollBaseY = 0, _lastDy = 0, _lastTime = 0;
+
+function initInput(screenW) {
+  _sw = screenW; _sc = screenW / DESIGN_W;
+
+  wx.onTouchStart(function(e) {
+    _touchStartX = t.clientX; _touchStartY = t.clientY; _touchStartTime = Date.now();
+    _isScrolling = false; _scrollBaseY = state.scrollY; _lastDy = 0; _lastTime = _touchStartTime;
+  });
+
+  wx.onTouchMove(function(e) {
+    if (!_isScrolling && Math.abs(dy) > 8 && Math.abs(_touchStartX - t.clientX) < Math.abs(dy) * 2) _isScrolling = true;
+    if (_isScrolling) {
+      state.scrollY = _scrollBaseY + dy;
+      if (state.scrollY < 0) state.scrollY = 0;
+      if (state.scrollY > state.maxScrollY) state.scrollY = state.maxScrollY;
+      _lastDy = t.clientY - _touchStartY; _lastTime = Date.now();
+    }
+  });
+
+  wx.onTouchEnd(function(e) {
+    if (_isScrolling) {
+      var dt = Date.now() - _lastTime;
+      if (dt > 0 && dt < 100) state.scrollVelocity = -_lastDy / dt * 16;
+      return;
+    }
+    if (Date.now() - _touchStartTime > 300) return;
+    hitTest(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+  });
+}
 
 function hitTest(x, y) {
   if (state.gameOver) { restartGame(); return; }
@@ -917,22 +912,18 @@ function hitTest(x, y) {
     if (pv > 0) { onSupremePick(pv); return; }
   }
   if (hitMenuBtn(x, y)) { toggleMenu(); return; }
-  var pw = hitPowerBtn(x, y); if (pw) { selectPower(pw); return; }
   var up = hitUpgradeBtn(x, y); if (up) { selectPower(up); return; }
   var cell = hitCell(x, y);
   if (cell) { handleCellTap(cell.row, cell.col); return; }
 }
 
 function hitMenuBtn(x, y) {
-  var bx = _sw - 66 * _sc - 56 * _sc, by = HEADER_PAD_TOP * _sc + 7 * _sc;
   return x >= bx && x <= bx + 56 * _sc && y >= by && y <= by + 56 * _sc;
 }
 
 function hitPowerBtn(x, y) {
   var py = HEADER_H * _sc + 10 * _sc, pw = 64 * _sc, px = _sw - 30 * _sc - pw;
-  var powers = ['wand', 'swap', 'clear'];
   for (var i = 0; i < powers.length; i++) {
-    var bx = px - i * (pw + 8 * _sc);
     if (x >= bx && x <= bx + pw && y >= py && y <= py + 64 * _sc) return powers[i];
   }
   return null;
@@ -940,22 +931,17 @@ function hitPowerBtn(x, y) {
 
 function hitUpgradeBtn(x, y) {
   var by = (HEADER_H + CONTROL_H) * _sc, bw = 150 * _sc, bh = 46 * _sc;
-  var items = ['supremeWand', 'dragonHand', 'immortal'];
   var totalW = items.length * bw + 2 * 12 * _sc, sx = (_sw - totalW) / 2;
   for (var i = 0; i < items.length; i++) {
-    var bx = sx + i * (bw + 12 * _sc);
     if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return items[i];
   }
   return null;
 }
 
 function hitCell(x, y) {
-  var cellW = CELL_W * _sc, cellH = CELL_H * _sc, gap = GAP * _sc, rowH = ROW_H * _sc;
-  var totalW = COLS * cellW + (COLS - 1) * gap;
   var bl = (_sw - totalW) / 2, bt = BOARD_TOP * _sc - state.scrollY;
   for (var r = 0; r < ROWS; r++) {
     for (var c = 0; c < COLS; c++) {
-      var cx = bl + c * (cellW + gap), cy = bt + r * rowH;
       if (x >= cx && x <= cx + cellW && y >= cy && y <= cy + cellH) return { row: r, col: c };
     }
   }
@@ -963,19 +949,15 @@ function hitCell(x, y) {
 }
 
 function hitSupremePicker(x, y) {
-  var py = HEADER_H * _sc + 30 * _sc, exitS = 50 * _sc, ecx = 20 * _sc + exitS / 2, ecy = py + exitS / 2;
   if ((x - ecx) * (x - ecx) + (y - ecy) * (y - ecy) <= (exitS / 2) * (exitS / 2)) return 'exit';
   var ow = 90 * _sc, oh = 70 * _sc, sx = 20 * _sc + exitS + 16 * _sc;
-  var opts = state.supremePicker.options;
   for (var i = 0; i < opts.length; i++) {
-    var ox = sx + i * (ow + 10 * _sc);
     if (x >= ox && x <= ox + ow && y >= py && y <= py + oh) return opts[i];
   }
   return 0;
 }
 
 function hitMenu(x, y) {
-  var mw = 280 * _sc, mx = _sw - 30 * _sc - mw, my = 100 * _sc, itemH = 56 * _sc;
   if (x >= mx && x <= mx + mw && y >= my && y <= my + itemH * 4) {
     var idx = Math.floor((y - my) / itemH);
     if (idx === 0) return 'sfx'; if (idx === 1) return 'bgm'; if (idx === 2) return 'restart';
@@ -997,22 +979,10 @@ function handleCellTap(row, col) {
     if (isBoardFull()) state.gameOver = true;
     return;
   }
-  var mc = countMergeCells();
   state.currentNumber = generateNumber();
   state.gameOver = isBoardFull();
   runWave(function() { chainBonuses(mc); });
 }
-
-
-function gameLoop(timestamp) {
-  var now = timestamp || Date.now();
-  updateAnim(now);
-  processActions(now);
-  updateScrollInertia();
-  render();
-  requestAnimationFrame(gameLoop);
-}
-
 
 
 function init() {
@@ -1025,7 +995,6 @@ function init() {
   canvas.width = screenW * dpr;
   canvas.height = screenH * dpr;
 
-  var ctx = canvas.getContext("2d");
   ctx.scale(dpr, dpr);
 
   initState();
@@ -1040,36 +1009,15 @@ function init() {
   requestAnimationFrame(gameLoop);
 }
 
+function gameLoop(timestamp) {
+  var now = timestamp || Date.now();
+  updateAnim(now);
+  processActions(now);
+  updateScrollInertia();
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+
 // === Init ===
 init();
-
-function initInput(screenW) {
-  _sw = screenW; _sc = screenW / DESIGN_W;
-
-  wx.onTouchStart(function(e) {
-    var t = e.touches[0];
-    _touchStartX = t.clientX; _touchStartY = t.clientY; _touchStartTime = Date.now();
-    _isScrolling = false; _scrollBaseY = state.scrollY; _lastDy = 0; _lastTime = _touchStartTime;
-  });
-
-  wx.onTouchMove(function(e) {
-    var t = e.touches[0], dy = _touchStartY - t.clientY;
-    if (!_isScrolling && Math.abs(dy) > 8 && Math.abs(_touchStartX - t.clientX) < Math.abs(dy) * 2) _isScrolling = true;
-    if (_isScrolling) {
-      state.scrollY = _scrollBaseY + dy;
-      if (state.scrollY < 0) state.scrollY = 0;
-      if (state.scrollY > state.maxScrollY) state.scrollY = state.maxScrollY;
-      _lastDy = t.clientY - _touchStartY; _lastTime = Date.now();
-    }
-  });
-
-  wx.onTouchEnd(function(e) {
-    if (_isScrolling) {
-      var dt = Date.now() - _lastTime;
-      if (dt > 0 && dt < 100) state.scrollVelocity = -_lastDy / dt * 16;
-      return;
-    }
-    if (Date.now() - _touchStartTime > 300) return;
-    hitTest(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-  });
-}
