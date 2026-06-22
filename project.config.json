@@ -48,12 +48,13 @@
   },
   "compileType": "miniprogram",
   "libVersion": "3.16.1",
-  "appid": "touristappid",
+  "appid": "wx7cc59177da926d07",
   "projectname": "number-merge-game",
   "condition": {},
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
   },
-  "simulatorPluginLibVersion": {}
+  "simulatorPluginLibVersion": {},
+  "isGameTourist": false
 }

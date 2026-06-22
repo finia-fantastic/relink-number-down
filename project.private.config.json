@@ -1,6 +1,6 @@
 {
   "libVersion": "3.16.1",
-  "projectname": "%E4%BC%A0%E5%A5%87%E6%95%B0%E5%AD%97%E4%B8%8B%E8%90%BD",
+  "projectname": "number-merge-game",
   "condition": {},
   "setting": {
     "urlCheck": true,
