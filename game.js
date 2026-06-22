@@ -637,8 +637,6 @@ function restartGame() {
   state.showMenu = false; initState(); state.currentNumber = generateNumber();
 }
 
-var state = state;
-var getCelebTransform = getCelebTransform;
 
 var _ctx = null, _sw = 0, _sh = 0, _sc = 1;
 
