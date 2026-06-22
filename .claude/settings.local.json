@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(node -c \"d:/number-merge-game/pages/index/index.js\")",
-      "Bash(node -c \"d:/myGames/number-merge-game/pages/index/index.js\")",
-      "Bash(node -e \"try { require\\('fs'\\).readFileSync\\('d:/myGames/number-merge-game/pages/index/index.js','utf8'\\); console.log\\('readable'\\); } catch\\(e\\) { console.log\\('error:', e.message\\); }\")"
-    ]
-  }
-}
