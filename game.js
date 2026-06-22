@@ -39,11 +39,12 @@ var SCALE = W / DESIGN_W;
 
 // Layout constants (design units, scaled to logical px via SCALE)
 var LAYOUT = {};
-LAYOUT.headerY  = 10;   LAYOUT.headerH  = 70;
-LAYOUT.controlY = 90;   LAYOUT.controlH = 100;
-LAYOUT.upgradeY = 200;  LAYOUT.upgradeH = 50;
-LAYOUT.hintY    = 258;  LAYOUT.hintH    = 32;
-LAYOUT.boardTop = 295;
+LAYOUT.topPad = 30;
+LAYOUT.headerY  = LAYOUT.topPad + 0;    LAYOUT.headerH  = 70;
+LAYOUT.controlY = LAYOUT.topPad + 80;   LAYOUT.controlH = 100;
+LAYOUT.upgradeY = LAYOUT.topPad + 190;  LAYOUT.upgradeH = 50;
+LAYOUT.hintY    = LAYOUT.topPad + 248;  LAYOUT.hintH    = 32;
+LAYOUT.boardTop = LAYOUT.topPad + 285;
 
 var SPAWN_VALUES = [2, 4, 8, 16, 32];
 var WAND_VALUES  = [2, 4, 8, 16, 32, 64];
