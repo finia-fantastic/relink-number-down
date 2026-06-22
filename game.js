@@ -716,7 +716,7 @@ function onCellTap(row, col) {
   if (state.gameOver) return;
   if (state.supremePicker) { handleSupremeTap(row,col); return; }
   if (state.activePower) { handlePowerTap(row,col); return; }
-  if (!placeNumber(col, state.currentNumber)) { if (isBoardFull()) state.gameOver = true; return; }
+  if (!placeNumber(col, state.currentNumber)) return;
   var mc = countMergeCells(); state.currentNumber = generateNumber(); state.gameOver = isBoardFull();
   runWave(function() { chainBonuses(mc); });
 }
