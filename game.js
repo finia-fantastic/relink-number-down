@@ -43,7 +43,7 @@ function initState() {
 
 // ======================== LAYOUT ========================
 var LAYOUT = {};
-LAYOUT.topPad = 15;
+LAYOUT.topPad = 45;
 LAYOUT.headerH = 56;
 LAYOUT.controlH = 90;
 LAYOUT.upgradeH = 44;
